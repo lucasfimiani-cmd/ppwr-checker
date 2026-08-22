@@ -861,15 +861,15 @@ function renderResult(container) {
     <hr class="divider">
 
     <div style="text-align:center;padding:.5rem 0">
-      <p style="font-size:.9rem;color:var(--muted);margin-bottom:.25rem">📄 Relatório detalhado disponível por e-mail</p>
-      <p style="font-size:.8rem;color:var(--muted)">Preencha seus dados e receba o relatório completo em PDF com todas as análises,<br>bandeiras, recomendações e detalhamento por pergunta.</p>
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:.25rem">📄 Relatório disponível para download</p>
+      <p style="font-size:.8rem;color:var(--muted)">Preencha seus dados e faça o download do relatório completo em PDF com todas as análises,<br>bandeiras, recomendações e detalhamento por pergunta.</p>
     </div>
 
     <hr class="divider">
 
     <div class="nav no-print">
       <button class="btn btn-outline" onclick="resetAll()">🔄 Nova verificação</button>
-      <button class="btn btn-success" onclick="openSendReport()">📧 Receber relatório completo por e-mail</button>
+      <button class="btn btn-success" onclick="openSendReport()">📥 Baixar relatório completo</button>
     </div>
     <p style="font-size:.72rem;color:var(--muted);margin-top:1rem;text-align:center">
       ⚠️ Esta ferramenta fornece uma análise indicativa. Consulte um especialista jurídico em compliance da UE para decisões formais.
@@ -1201,35 +1201,7 @@ function submitReport() {
   // Save lead
   saveLead(company);
 
-  const score = state.report || scoreAnswers(state.answers);
-  const date = new Date().toLocaleString('pt-BR');
-  const veredicts = [
-    { max:30, label:'Alto Risco — Não Conforme' },
-    { max:55, label:'Risco Moderado — Necessita Melhorias' },
-    { max:75, label:'Risco Baixo — Quase Conforme' },
-    { max:100, label:'Risco Baixo — Bem Posicionado' },
-  ];
-  const v = veredicts.find(v => score.overall <= v.max) || veredicts[veredicts.length-1];
-
-  const fullMsg = `Segue o relatório de conformidade PPWR para ${company.name}.
-
-══════════════════════════════════
-SCORE PPWR: ${score.overall}% — ${v.label}
-══════════════════════════════════
-
-Empresa: ${company.name}
-E-mail: ${company.email}${company.phone ? '\nTelefone: ' + company.phone : ''}
-Data: ${date}
-
-📊 O relatório completo em PDF foi baixado automaticamente.
-Anexe o arquivo a este e-mail antes de enviar.
-
-⚠️  Análise indicativa. Consulte um especialista jurídico
-   em compliance da UE para decisões formais.
-
-Gerado por PPWR Checker`;
-
-  // Build PDF in background for download
+  // Build report HTML off-screen
   const html = buildFullReportHTML(company);
   const container = document.createElement('div');
   container.style.position = 'fixed';
@@ -1241,84 +1213,55 @@ Gerado por PPWR Checker`;
   container.innerHTML = html;
   document.body.appendChild(container);
 
-  // First send email (reliable — no upload needed)
-  emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
-    to_email: company.email,
-    to_name: company.name,
-    from_name: 'PPWR Checker',
-    message: fullMsg,
-    score_text: `${score.overall}%`,
-    company_name: company.name,
-    date_text: new Date().toLocaleDateString('pt-BR'),
-    download_link: 'Gerado em ' + date,
-  }).then(response => {
-    // Email sent! Now generate PDF for download in background
-    html2canvas(container, {
-      scale: 1.5,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      width: 800,
-      logging: false,
-    }).then(canvas => {
-      document.body.removeChild(container);
-      const imgData = canvas.toDataURL('image/jpeg', 0.85);
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgW = 190;
-      const imgH = (canvas.height / canvas.width) * imgW;
-      const pageH = 277;
+  // Generate PDF and download
+  html2canvas(container, {
+    scale: 1.5,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    width: 800,
+    logging: false,
+  }).then(canvas => {
+    document.body.removeChild(container);
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgW = 190;
+    const imgH = (canvas.height / canvas.width) * imgW;
+    const pageH = 277;
 
-      if (imgH <= pageH) {
-        pdf.addImage(imgData, 'JPEG', 10, 10, imgW, imgH);
-      } else {
-        let remaining = imgH, srcY = 0;
-        while (remaining > 0) {
-          const h = Math.min(remaining, pageH);
-          const sc = document.createElement('canvas');
-          sc.width = canvas.width;
-          sc.height = Math.round((h / imgH) * canvas.height);
-          sc.getContext('2d').drawImage(canvas, 0, Math.round((srcY / imgH) * canvas.height), canvas.width, sc.height, 0, 0, canvas.width, sc.height);
-          if (pdf.internal.getNumberOfPages() > 1) pdf.addPage();
-          pdf.addImage(sc.toDataURL('image/jpeg', 0.85), 'JPEG', 10, 10, imgW, h);
-          remaining -= h;
-          srcY += h;
-        }
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, 'JPEG', 10, 10, imgW, imgH);
+    } else {
+      let remaining = imgH, srcY = 0;
+      while (remaining > 0) {
+        const h = Math.min(remaining, pageH);
+        const sc = document.createElement('canvas');
+        sc.width = canvas.width;
+        sc.height = Math.round((h / imgH) * canvas.height);
+        sc.getContext('2d').drawImage(canvas, 0, Math.round((srcY / imgH) * canvas.height), canvas.width, sc.height, 0, 0, canvas.width, sc.height);
+        if (pdf.internal.getNumberOfPages() > 1) pdf.addPage();
+        pdf.addImage(sc.toDataURL('image/jpeg', 0.85), 'JPEG', 10, 10, imgW, h);
+        remaining -= h;
+        srcY += h;
       }
-      const pageCount = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(8);
-        pdf.setTextColor(148, 163, 184);
-        pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
-      }
-      pdf.save(`PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
-    }).catch(e => {
-      document.body.removeChild(container);
-    });
+    }
+    const pageCount = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(8);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
+    }
+    pdf.save(`PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
 
     // Show success
-    document.getElementById('successEmail').textContent = company.email;
     document.getElementById('reportLoadingView').classList.add('hidden');
     document.getElementById('reportSuccessView').classList.remove('hidden');
   }).catch(err => {
-    // Email failed — offer PDF download
+    document.body.removeChild(container);
     document.getElementById('reportLoadingView').classList.add('hidden');
     document.getElementById('reportFormView').classList.remove('hidden');
-
-    html2canvas(container, {
-      scale: 1.5, useCORS: true, backgroundColor: '#ffffff', width: 800, logging: false,
-    }).then(canvas => {
-      document.body.removeChild(container);
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgData = canvas.toDataURL('image/jpeg', 0.85);
-      pdf.addImage(imgData, 'JPEG', 10, 10, 190, (canvas.height/canvas.width)*190);
-      pdf.save(`PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
-      alert('E-mail temporariamente indisponível. O PDF foi baixado — envie manualmente para o cliente.');
-    }).catch(e => {
-      document.body.removeChild(container);
-      alert('Erro ao enviar e-mail: ' + (err.message || err.text || 'tente novamente'));
-    });
+    alert('Erro ao gerar o PDF: ' + (err.message || 'tente novamente'));
   });
 }
 
@@ -1361,8 +1304,8 @@ render();
 <div class="modal-overlay hidden" id="reportModal">
 <div class="modal" id="reportModalInner">
   <div id="reportFormView">
-    <h3>📧 Enviar relatório</h3>
-    <p class="desc">Preencha os dados da empresa para gerar o relatório de conformidade PPWR.</p>
+    <h3>📥 Baixar relatório</h3>
+    <p class="desc">Preencha seus dados para fazer o download do relatório completo de conformidade PPWR.</p>
     <div class="field">
       <label for="companyName">Empresa *</label>
       <input type="text" id="companyName" placeholder="Razão social da empresa" oninput="clearFieldError('companyName')">
@@ -1379,7 +1322,7 @@ render();
     </div>
     <div class="nav">
       <button class="btn btn-outline" onclick="closeSendReport()">Cancelar</button>
-      <button class="btn btn-primary" onclick="submitReport()">📧 Gerar PDF e enviar por e-mail</button>
+      <button class="btn btn-primary" onclick="submitReport()">📥 Baixar PDF</button>
     </div>
   </div>
   <div id="reportLoadingView" class="hidden">
@@ -1392,8 +1335,8 @@ render();
   <div id="reportSuccessView" class="hidden">
     <div class="success-box">
       <div class="icon">✅</div>
-      <h4>Relatório enviado com sucesso!</h4>
-      <p>O relatório completo foi enviado para <strong id="successEmail"></strong> com todas as análises, scores e recomendações.<br><br>O PDF foi baixado automaticamente para sua máquina. Verifique sua caixa de entrada (e a pasta de spam).</p>
+      <h4>PDF baixado com sucesso!</h4>
+      <p>O relatório completo foi baixado para sua máquina com todas as análises, scores, bandeiras e recomendações.</p>
       <button class="btn btn-primary btn-block" onclick="closeSendReport()">Concluído</button>
     </div>
   </div>
