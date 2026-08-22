@@ -1207,25 +1207,48 @@ function submitReport() {
       pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
     }
 
-    // Get PDF as base64 for EmailJS
-    const dataUri = pdf.output('datauristring');
-    const base64Data = dataUri.split(',')[1];
-    const score = state.report || scoreAnswers(state.answers);
+    // Get PDF as blob for file.io upload
+    const blob = pdf.output('blob');
+    const filename = `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
+    const formData = new FormData();
+    formData.append('file', blob, filename);
+    formData.append('expires', '1d');
+    formData.append('maxDownloads', '3');
 
-    // Send via EmailJS
-    return emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
-      to_email: company.email,
-      to_name: company.name,
-      from_name: 'PPWR Checker',
-      message: `Segue em anexo o relatório completo de conformidade PPWR.\n\nEmpresa: ${company.name}\nScore PPWR: ${score.overall}%\nData: ${new Date().toLocaleString('pt-BR')}`,
-      score_text: `${score.overall}%`,
-      company_name: company.name,
-      date_text: new Date().toLocaleDateString('pt-BR'),
-      attachment: [{
-        name: `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`,
-        data: base64Data,
-        type: 'application/pdf'
-      }]
+    // Upload to file.io (free, no auth)
+    return fetch('https://file.io', {
+      method: 'POST',
+      body: formData,
+    }).then(r => r.json()).then(uploadResult => {
+      if (!uploadResult.success || !uploadResult.link) {
+        throw new Error('Upload failed: ' + JSON.stringify(uploadResult));
+      }
+      const pdfLink = uploadResult.link;
+      const score = state.report || scoreAnswers(state.answers);
+
+      // Send via EmailJS free plan — no attachment, just download link
+      return emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
+        to_email: company.email,
+        to_name: company.name,
+        from_name: 'PPWR Checker',
+        message: `Segue o relatório completo de conformidade PPWR para ${company.name}.
+
+Score PPWR: ${score.overall}%
+Empresa: ${company.name}
+Data: ${new Date().toLocaleString('pt-BR')}
+
+📥 Link para download do PDF (válido por 24h):
+${pdfLink}
+
+O link expira após 3 downloads ou 24 horas.
+
+---
+Gerado por PPWR Checker`,
+        score_text: `${score.overall}%`,
+        company_name: company.name,
+        date_text: new Date().toLocaleDateString('pt-BR'),
+        download_link: pdfLink,
+      });
     });
   }).then(response => {
     // Success — EmailJS sent
@@ -1281,7 +1304,7 @@ render();
     <div class="success-box">
       <div class="icon">✅</div>
       <h4>Relatório enviado com sucesso!</h4>
-      <p>O relatório PDF foi gerado e enviado para o e-mail <strong id="successEmail"></strong>. Verifique sua caixa de entrada (e também a pasta de spam).</p>
+      <p>O relatório PDF foi gerado e o link de download foi enviado para <strong id="successEmail"></strong>. O link expira em 24h. Verifique sua caixa de entrada (e também a pasta de spam).</p>
       <button class="btn btn-primary btn-block" onclick="closeSendReport()">Concluído</button>
     </div>
   </div>
