@@ -188,11 +188,6 @@
   .flag-legend .dot.yellow{background:var(--amber)}
   .flag-legend .dot.green{background:var(--green)}
 
-  /* Admin button */
-  .admin-bar{text-align:center;padding:.5rem 0;margin-top:.5rem}
-  .admin-bar .btn{font-size:.75rem;padding:.3rem .8rem;background:var(--border);color:var(--muted);border:none;border-radius:6px;cursor:pointer}
-  .admin-bar .btn:hover{background:#cbd5e1;color:var(--text)}
-
   /* Modal de envio */
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem}
   .modal{background:var(--card);border-radius:var(--radius);box-shadow:0 20px 60px rgba(0,0,0,.25);padding:2rem;max-width:480px;width:100%;max-height:90vh;overflow-y:auto}
@@ -879,12 +874,8 @@ function renderResult(container) {
     <p style="font-size:.72rem;color:var(--muted);margin-top:1rem;text-align:center">
       ⚠️ Esta ferramenta fornece uma análise indicativa. Consulte um especialista jurídico em compliance da UE para decisões formais.
     </p>
-  </div>
-
-  <!-- Admin bar -->
-  <div class="admin-bar no-print">
-    <button class="btn" onclick="exportLeads()">📋 Exportar leads (CSV)</button>
-  </div>`;
+  `;
+  }
 }
 
 /* ============================================================
@@ -1342,6 +1333,36 @@ Gerado por PPWR Checker`,
     }
   });
 }
+
+/* ============================================================
+   Admin Panel (password-protected)
+   ============================================================ */
+const ADMIN_PASSWORD = 'ppwr2026';
+
+function openAdmin() {
+  const pwd = prompt('🔐 Acesso restrito. Digite a senha de administrador:');
+  if (pwd === ADMIN_PASSWORD) {
+    const leads = getLeads();
+    if (leads.length === 0) {
+      alert('Nenhum lead cadastrado ainda.');
+      return;
+    }
+    exportLeads();
+  } else if (pwd !== null) {
+    alert('Senha incorreta.');
+  }
+}
+
+// Listen for #admin hash in URL
+window.addEventListener('hashchange', checkAdminHash);
+function checkAdminHash() {
+  if (window.location.hash === '#admin') {
+    openAdmin();
+    // Clean the hash
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+checkAdminHash();
 
 /* ============================================================
    Init
