@@ -1202,8 +1202,6 @@ function submitReport() {
   saveLead(company);
 
   const score = state.report || scoreAnswers(state.answers);
-  const flags = findRedFlags(state.answers);
-  const recs = generateRecs(state.answers, score);
   const date = new Date().toLocaleString('pt-BR');
   const veredicts = [
     { max:30, label:'Alto Risco — Não Conforme' },
@@ -1212,52 +1210,23 @@ function submitReport() {
     { max:100, label:'Risco Baixo — Bem Posicionado' },
   ];
   const v = veredicts.find(v => score.overall <= v.max) || veredicts[veredicts.length-1];
-  const catLabels = { reciclabilidade:'Reciclabilidade', reciclado:'Conteúdo Reciclado', minimizacao:'Minimização', submateriais:'Separação/Revestimentos', rotulagem:'Rotulagem', substancias:'Substâncias' };
 
-  // Build full report text for email
-  let det = '';
-  QUESTIONS.forEach(q => {
-    if (!isVisible(q)) return;
-    const a = state.answers[q.id];
-    if (a === undefined) return;
-    const display = Array.isArray(a) ? a.join(', ') : String(a);
-    if (display) det += `\n• ${q.text}\n  → ${display}`;
-  });
+  const fullMsg = `Segue o relatório de conformidade PPWR para ${company.name}.
 
-  let catDet = '';
-  for (const [cat, pts] of Object.entries(score.catScores)) {
-    if (pts === undefined) continue;
-    catDet += `\n  ${(catLabels[cat]||cat)}: ${pts}%`;
-  }
-
-  let flagDet = '';
-  if (flags.length) flagDet = '\n' + flags.map(f => '\n⚠️  ' + f.replace(/<\/?strong>/g, '*').replace(/<[^>]+>/g, '')).join('');
-
-  let recDet = '';
-  if (recs.length) recDet = '\n' + recs.map(r => '\n✅ ' + r).join('');
-
-  const fullMsg = `Segue o relatório completo de conformidade PPWR para ${company.name}.
-
-═════════════════════════════════════════
+══════════════════════════════════
 SCORE PPWR: ${score.overall}% — ${v.label}
-═════════════════════════════════════════
+══════════════════════════════════
 
 Empresa: ${company.name}
 E-mail: ${company.email}${company.phone ? '\nTelefone: ' + company.phone : ''}
 Data: ${date}
 
-── CATEGORIAS ──${catDet}
+📊 O relatório completo em PDF foi baixado automaticamente.
+Anexe o arquivo a este e-mail antes de enviar.
 
-── BANDEIRAS VERMELHAS ──${flagDet}
-
-── RECOMENDAÇÕES ──${recDet}
-
-── DETALHAMENTO POR PERGUNTA ──${det}
-
-─────────────────────────────────────────
 ⚠️  Análise indicativa. Consulte um especialista jurídico
    em compliance da UE para decisões formais.
-─────────────────────────────────────────
+
 Gerado por PPWR Checker`;
 
   // Build PDF in background for download
