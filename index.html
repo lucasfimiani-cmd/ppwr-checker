@@ -712,23 +712,11 @@ function renderQuiz(container) {
 
 /* ----- REVIEW ----- */
 function renderReview(container) {
-  const score = scoreAnswers(state.answers);
-  const flags = findRedFlags(state.answers);
-  const recs = generateRecs(state.answers, score);
-
   container.innerHTML = `
   <div class="card">
     <h2>📋 Revisão das Respostas</h2>
     <p class="desc">Confirme os dados antes da análise. Clique em <strong>Editar</strong> para voltar a uma pergunta.</p>
     <div id="reviewList"></div>
-    <hr class="divider">
-    <div class="result-summary">
-      <div class="score-ring" style="border-color:${score.overall<40?'var(--red)':score.overall<70?'var(--amber)':'var(--green)'}">
-        ${score.overall}%
-        <span class="label">Score preliminar</span>
-      </div>
-    </div>
-    ${flags.length ? `<div class="red-flags"><h3 style="font-size:.9rem;color:var(--red);margin-bottom:.5rem">⚠️ Bandeiras Vermelhas</h3>${flags.map(f=>`<div class="red-flag">${f}</div>`).join('')}</div>` : ''}
     <div class="nav">
       <button class="btn btn-outline" onclick="editAnswers()">✏️ Editar respostas</button>
       <button class="btn btn-success" onclick="confirmAndAnalyze()">✅ Confirmar e analisar</button>
@@ -1207,26 +1195,26 @@ function submitReport() {
       pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
     }
 
-    // Get PDF as blob for file.io upload
+    // Get PDF as blob
     const blob = pdf.output('blob');
     const filename = `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
+    const score = state.report || scoreAnswers(state.answers);
+
+    // Upload to tmpfiles.org (free, no auth, supports CORS)
     const formData = new FormData();
     formData.append('file', blob, filename);
-    formData.append('expires', '1d');
-    formData.append('maxDownloads', '3');
 
-    // Upload to file.io (free, no auth)
-    return fetch('https://file.io', {
+    return fetch('https://tmpfiles.org/api/v1/upload', {
       method: 'POST',
       body: formData,
     }).then(r => r.json()).then(uploadResult => {
-      if (!uploadResult.success || !uploadResult.link) {
+      if (!uploadResult.success || !uploadResult.data || !uploadResult.data.url) {
         throw new Error('Upload failed: ' + JSON.stringify(uploadResult));
       }
-      const pdfLink = uploadResult.link;
-      const score = state.report || scoreAnswers(state.answers);
+      // Convert tmpfiles.org URL to direct download URL
+      const pdfLink = uploadResult.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
 
-      // Send via EmailJS free plan — no attachment, just download link
+      // Send via EmailJS
       return emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
         to_email: company.email,
         to_name: company.name,
@@ -1237,10 +1225,8 @@ Score PPWR: ${score.overall}%
 Empresa: ${company.name}
 Data: ${new Date().toLocaleString('pt-BR')}
 
-📥 Link para download do PDF (válido por 24h):
+📥 Link para download do PDF:
 ${pdfLink}
-
-O link expira após 3 downloads ou 24 horas.
 
 ---
 Gerado por PPWR Checker`,
@@ -1258,8 +1244,27 @@ Gerado por PPWR Checker`,
   }).catch(err => {
     console.error('PDF/Email generation failed:', err);
     document.getElementById('reportLoadingView').classList.add('hidden');
+    // Fallback: offer direct PDF download + mailto
     document.getElementById('reportFormView').classList.remove('hidden');
-    alert('Erro ao enviar o relatório: ' + (err.message || err.text || 'verifique o console'));
+    const msg = err.message || err.text || 'erro desconhecido';
+    if (confirm(`Erro ao enviar o relatório: ${msg}\n\nDeseja baixar o PDF manualmente?`)) {
+      // Re-generate PDF and download
+      const html2 = buildFullReportHTML(company);
+      const c2 = document.createElement('div');
+      c2.style.position = 'fixed'; c2.style.left = '-9999px'; c2.style.width = '800px'; c2.style.background = '#fff';
+      c2.innerHTML = html2;
+      document.body.appendChild(c2);
+      html2canvas(c2, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', width: 800, logging: false })
+        .then(canvas2 => {
+          document.body.removeChild(c2);
+          const { jsPDF } = window.jspdf;
+          const pdf2 = new jsPDF('p', 'mm', 'a4');
+          const imgData2 = canvas2.toDataURL('image/jpeg', 0.85);
+          pdf2.addImage(imgData2, 'JPEG', 10, 10, 190, (canvas2.height/canvas2.width)*190);
+          pdf2.save(`PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+          alert('PDF baixado! Envie manualmente para o cliente por e-mail.');
+        });
+    }
   });
 }
 
