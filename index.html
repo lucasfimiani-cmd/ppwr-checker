@@ -1200,19 +1200,19 @@ function submitReport() {
     const filename = `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
     const score = state.report || scoreAnswers(state.answers);
 
-    // Upload to tmpfiles.org (free, no auth, supports CORS)
+    // Upload to catbox.moe (free, no auth, CORS-friendly)
     const formData = new FormData();
-    formData.append('file', blob, filename);
+    formData.append('reqtype', 'fileupload');
+    formData.append('fileToUpload', blob, filename);
 
-    return fetch('https://tmpfiles.org/api/v1/upload', {
+    return fetch('https://catbox.moe/user/api.php', {
       method: 'POST',
       body: formData,
-    }).then(r => r.json()).then(uploadResult => {
-      if (!uploadResult.success || !uploadResult.data || !uploadResult.data.url) {
-        throw new Error('Upload failed: ' + JSON.stringify(uploadResult));
+    }).then(r => r.text()).then(url => {
+      if (!url || url.startsWith('error') || !url.startsWith('https://')) {
+        throw new Error('Upload failed: ' + url);
       }
-      // Convert tmpfiles.org URL to direct download URL
-      const pdfLink = uploadResult.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+      const pdfLink = url;
 
       // Send via EmailJS
       return emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
