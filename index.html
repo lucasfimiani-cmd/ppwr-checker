@@ -6,6 +6,7 @@
 <title>PPWR Checker • Conformidade de Embalagens para UE</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root {
     --green: #16a34a;
@@ -912,6 +913,17 @@ function resetAll() {
    ============================================================ */
 
 /* ============================================================
+   EmailJS Configuration
+   ============================================================ */
+const EMAILJS_CONFIG = {
+  publicKey: 'SUA_PUBLIC_KEY_AQUI',  // Pego em emailjs.com > Account > API Keys
+  serviceID: 'SEU_SERVICE_ID_AQUI',  // Pego em emailjs.com > Email Services
+  templateID: 'SEU_TEMPLATE_ID_AQUI' // Pego em emailjs.com > Email Templates
+};
+
+emailjs.init(EMAILJS_CONFIG.publicKey);
+
+/* ============================================================
    Report Sending — PDF via email only
    ============================================================ */
 
@@ -1125,74 +1137,6 @@ function exportLeads() {
   URL.revokeObjectURL(url);
 }
 
-/* ---- PDF generation and email ---- */
-function generatePDF(company) {
-  // Build the full report HTML
-  const html = buildFullReportHTML(company);
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  container.style.width = '800px';
-  container.style.backgroundColor = '#ffffff';
-  container.style.zIndex = '-1';
-  container.innerHTML = html;
-  document.body.appendChild(container);
-
-  return html2canvas(container, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    width: 800,
-    logging: false,
-  }).then(canvas => {
-    document.body.removeChild(container);
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfW = 210;
-    const pdfH = 297;
-    const imgW = 190;
-    const imgH = (canvas.height / canvas.width) * imgW;
-    let yOffset = 10;
-    // If image is taller than a page, split into pages
-    const pageH = pdfH - 20; // usable height
-    if (imgH <= pageH) {
-      pdf.addImage(imgData, 'JPEG', 10, yOffset, imgW, imgH);
-    } else {
-      // Split into multiple pages
-      const ratio = canvas.height / pageH * (imgW / canvas.width) * 10;
-      // Simpler approach: just scale to fit width and add pages
-      let remaining = imgH;
-      let srcY = 0;
-      const pageImgH = pageH;
-      while (remaining > 0) {
-        const h = Math.min(remaining, pageImgH);
-        // Create a temp canvas for this slice
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.round((h / imgH) * canvas.height);
-        const ctx = sliceCanvas.getContext('2d');
-        ctx.drawImage(canvas, 0, Math.round((srcY / imgH) * canvas.height), canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
-        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.9);
-        if (pdf.internal.getNumberOfPages() > 1) pdf.addPage();
-        pdf.addImage(sliceData, 'JPEG', 10, 10, imgW, h);
-        remaining -= h;
-        srcY += h;
-      }
-    }
-    // Add footer
-    const pageCount = pdf.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      pdf.setPage(i);
-      pdf.setFontSize(8);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
-    }
-    return pdf;
-  });
-}
-
 function submitReport() {
   const company = getCompanyData();
   if (!company) return;
@@ -1204,30 +1148,95 @@ function submitReport() {
   // Save lead
   saveLead(company);
 
-  // Generate PDF
-  generatePDF(company).then(pdf => {
-    // Download the PDF
-    const filename = `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
-    pdf.save(filename);
+  // Build report HTML off-screen
+  const html = buildFullReportHTML(company);
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = '800px';
+  container.style.backgroundColor = '#ffffff';
+  container.style.zIndex = '-1';
+  container.innerHTML = html;
+  document.body.appendChild(container);
 
-    // Open mailto with pre-filled message
+  // Render to canvas (scale 1.5 to keep PDF < 50KB for EmailJS free tier)
+  html2canvas(container, {
+    scale: 1.5,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    width: 800,
+    logging: false,
+  }).then(canvas => {
+    document.body.removeChild(container);
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfW = 210;
+    const pdfH = 297;
+    const imgW = 190;
+    const imgH = (canvas.height / canvas.width) * imgW;
+    const pageH = pdfH - 20;
+
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, 'JPEG', 10, 10, imgW, imgH);
+    } else {
+      let remaining = imgH;
+      let srcY = 0;
+      while (remaining > 0) {
+        const h = Math.min(remaining, pageH);
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.round((h / imgH) * canvas.height);
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, Math.round((srcY / imgH) * canvas.height), canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.85);
+        if (pdf.internal.getNumberOfPages() > 1) pdf.addPage();
+        pdf.addImage(sliceData, 'JPEG', 10, 10, imgW, h);
+        remaining -= h;
+        srcY += h;
+      }
+    }
+
+    // Footer on all pages
+    const pageCount = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(8);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
+    }
+
+    // Get PDF as base64 for EmailJS
+    const dataUri = pdf.output('datauristring');
+    const base64Data = dataUri.split(',')[1];
     const score = state.report || scoreAnswers(state.answers);
-    const subject = encodeURIComponent(`Relatório de Conformidade PPWR — ${company.name}`);
-    const body = encodeURIComponent(
-      `Prezados,\n\nSegue em anexo o relatório de conformidade PPWR para ${company.name}.\n\nScore PPWR: ${score.overall}%\n\nO arquivo PDF foi baixado automaticamente — por favor, anexe-o a este e-mail antes de enviar.\n\n---\nGerado por PPWR Checker`
-    );
 
-    // Show success
+    // Send via EmailJS
+    return emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
+      to_email: company.email,
+      to_name: company.name,
+      from_name: 'PPWR Checker',
+      message: `Segue em anexo o relatório completo de conformidade PPWR.\n\nEmpresa: ${company.name}\nScore PPWR: ${score.overall}%\nData: ${new Date().toLocaleString('pt-BR')}`,
+      score_text: `${score.overall}%`,
+      company_name: company.name,
+      date_text: new Date().toLocaleDateString('pt-BR'),
+      attachment: [{
+        name: `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`,
+        data: base64Data,
+        type: 'application/pdf'
+      }]
+    });
+  }).then(response => {
+    // Success — EmailJS sent
+    document.getElementById('successEmail').textContent = company.email;
     document.getElementById('reportLoadingView').classList.add('hidden');
     document.getElementById('reportSuccessView').classList.remove('hidden');
-
-    // Open mailto
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   }).catch(err => {
-    console.error('PDF generation failed:', err);
+    console.error('PDF/Email generation failed:', err);
     document.getElementById('reportLoadingView').classList.add('hidden');
     document.getElementById('reportFormView').classList.remove('hidden');
-    alert('Erro ao gerar o PDF. Tente novamente.');
+    alert('Erro ao enviar o relatório: ' + (err.message || err.text || 'verifique o console'));
   });
 }
 
@@ -1270,9 +1279,9 @@ render();
   </div>
   <div id="reportSuccessView" class="hidden">
     <div class="success-box">
-      <div class="icon">📧</div>
-      <h4>Relatório PDF gerado!</h4>
-      <p>O PDF foi baixado automaticamente. Anexe-o ao e-mail que foi aberto e envie para o destinatário desejado.</p>
+      <div class="icon">✅</div>
+      <h4>Relatório enviado com sucesso!</h4>
+      <p>O relatório PDF foi gerado e enviado para o e-mail <strong id="successEmail"></strong>. Verifique sua caixa de entrada (e também a pasta de spam).</p>
       <button class="btn btn-primary btn-block" onclick="closeSendReport()">Concluído</button>
     </div>
   </div>
