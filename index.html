@@ -160,6 +160,20 @@
   .empty-state{text-align:center;padding:2rem 0;color:var(--muted)}
   .empty-state p{font-size:.95rem}
 
+  /* Landing page */
+  .landing{text-align:center;padding:2rem 1rem}
+  .landing .hero-icon{font-size:4rem;margin-bottom:.5rem}
+  .landing h2{font-size:1.5rem;font-weight:800;color:#1e3a5f;margin-bottom:.5rem}
+  .landing .subtitle{font-size:1rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.5}
+  .landing .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;max-width:600px;margin:0 auto 1.5rem;text-align:left}
+  @media(max-width:450px){.landing .info-grid{grid-template-columns:1fr}}
+  .landing .info-card{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:1rem}
+  .landing .info-card .icon{font-size:1.5rem;margin-bottom:.3rem}
+  .landing .info-card h4{font-size:.85rem;font-weight:700;margin-bottom:.3rem;color:var(--text)}
+  .landing .info-card p{font-size:.78rem;color:var(--muted);line-height:1.4}
+  .landing .btn-large{padding:.9rem 2.5rem;font-size:1.1rem;border-radius:12px;font-weight:700}
+  .landing .disclaimer{font-size:.72rem;color:var(--muted);margin-top:1rem;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.4}
+
   /* Flag counters */
   .flag-counter{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin:1rem 0}
   .flag-badge{display:flex;align-items:center;gap:.4rem;padding:.5rem 1rem;border-radius:999px;font-size:.85rem;font-weight:700}
@@ -576,11 +590,11 @@ function generateRecs(answers, score) {
    ============================================================ */
 
 let state = {
-  step: 0,            // index in SECTIONS
-  qIdx: 0,            // question index within section
+  step: 0,
+  qIdx: 0,
   answers: {},
   report: null,
-  stage: 'quiz',      // 'quiz' | 'review' | 'result'
+  stage: 'landing',   // 'landing' | 'quiz' | 'review' | 'result'
 };
 
 /* Question visibility */
@@ -602,6 +616,11 @@ function totalQuestions(sectionIdx) {
 
 /* Render step dots */
 function renderSteps() {
+  if (state.stage === 'landing') {
+    document.getElementById('stepsBar').style.display = 'none';
+    return;
+  }
+  document.getElementById('stepsBar').style.display = 'block';
   const c = document.getElementById('stepsContainer');
   const currentSecIdx = state.stage === 'result' ? SECTIONS.length-1 : state.step;
   let html = '';
@@ -618,9 +637,58 @@ function render() {
   renderSteps();
   const app = document.getElementById('app');
 
+  if (state.stage === 'landing') return renderLanding(app);
   if (state.stage === 'quiz') return renderQuiz(app);
   if (state.stage === 'review') return renderReview(app);
   if (state.stage === 'result') return renderResult(app);
+}
+
+/* ----- LANDING ----- */
+function renderLanding(container) {
+  container.innerHTML = `
+  <div class="card landing">
+    <div class="hero-icon">📦</div>
+    <h2>Regulamento Europeu de Embalagens (PPWR)</h2>
+    <p class="subtitle">
+      A <strong>Packaging and Packaging Waste Regulation (PPWR)</strong> é a nova lei da União Europeia
+      que define regras rigorosas para embalagens colocadas no mercado europeu.
+    </p>
+
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="icon">🎯</div>
+        <h4>Quem precisa?</h4>
+        <p>Toda empresa que exporta produtos embalados para a UE — incluindo fabricantes, importadores e distribuidores.</p>
+      </div>
+      <div class="info-card">
+        <div class="icon">📅</div>
+        <h4>Prazos críticos</h4>
+        <p><strong>2030:</strong> Todas as embalagens devem ser recicláveis. Metas de conteúdo reciclado para plásticos entram em vigor.</p>
+      </div>
+      <div class="info-card">
+        <div class="icon">⚖️</div>
+        <h4>O que muda?</h4>
+        <p>Restrições a substâncias, exigências de minimização, rotulagem obrigatória, e proibição de embalagens não recicláveis.</p>
+      </div>
+      <div class="info-card">
+        <div class="icon">🚨</div>
+        <h4>Riscos</h4>
+        <p>Embarques não conformes podem ser barrados na fronteira. Multas e danos à reputação para exportadores.</p>
+      </div>
+    </div>
+
+    <p style="font-size:.9rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.5">
+      Faça uma verificação rápida da conformidade da sua embalagem com a PPWR.
+      Responda algumas perguntas e receba um relatório completo com score, bandeiras e recomendações.
+    </p>
+
+    <button class="btn btn-primary btn-large" onclick="startCheck()">✅ Iniciar verificação</button>
+
+    <p class="disclaimer">
+      ⚠️ Esta ferramenta fornece uma análise indicativa. Consulte um especialista jurídico
+      em compliance da UE para decisões formais.
+    </p>
+  </div>`;
 }
 
 function getAnswerLabel(qId, answer) {
@@ -631,6 +699,13 @@ function getAnswerLabel(qId, answer) {
     return opt ? opt.l : String(answer);
   }
   return String(answer);
+}
+
+function startCheck() {
+  state.stage = 'quiz';
+  state.step = 0;
+  state.qIdx = 0;
+  render();
 }
 
 /* ----- QUIZ ----- */
