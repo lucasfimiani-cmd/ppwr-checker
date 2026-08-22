@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PPWR Checker • Conformidade de Embalagens para UE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --accent: #2563eb;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:16px;scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;
+    background:var(--bg);color:var(--text);min-height:100svh;
+    display:flex;flex-direction:column;
+  }
+  .container{max-width:800px;margin:0 auto;padding:1rem 1.25rem;width:100%}
+
+  /* Header */
+  header{
+    background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;
+    padding:1.5rem 0;
+  }
+  header .container{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+  header h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}
+  header .badge{
+    font-size:.7rem;background:rgba(255,255,255,.2);padding:.2rem .6rem;
+    border-radius:999px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+  }
+  header p{font-size:.85rem;opacity:.8;margin-top:.15rem;width:100%}
+
+  /* Steps bar */
+  .steps-bar{
+    display:flex;gap:0;background:var(--card);border-bottom:1px solid var(--border);
+    padding:.75rem 0;overflow-x:auto;
+  }
+  .steps-bar .container{display:flex;gap:.25rem;align-items:center;justify-content:space-between}
+  .step-dot{
+    display:flex;align-items:center;gap:.4rem;font-size:.72rem;font-weight:600;
+    color:var(--muted);white-space:nowrap;flex-shrink:0;
+  }
+  .step-dot .circle{
+    width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:.72rem;font-weight:700;background:var(--border);color:var(--muted);transition:.2s;
+  }
+  .step-dot.active .circle{background:var(--accent);color:#fff}
+  .step-dot.done .circle{background:var(--green);color:#fff}
+  .step-line{
+    flex:1;height:2px;background:var(--border);margin:0 .25rem;
+    transition:.2s;
+  }
+  .step-line.done{background:var(--green)}
+
+  /* Cards */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.75rem;margin-top:1.25rem}
+  .card h2{font-size:1.15rem;font-weight:700;margin-bottom:.25rem;color:var(--accent)}
+  .card .desc{font-size:.88rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.5}
+
+  /* Question */
+  .question{margin-bottom:1.5rem}
+  .question:last-child{margin-bottom:0}
+  .question .q-text{font-weight:600;font-size:.95rem;margin-bottom:.65rem;line-height:1.45}
+  .question .q-hint{font-size:.8rem;color:var(--muted);margin-bottom:.5rem}
+  .options{display:flex;flex-direction:column;gap:.5rem}
+  .options.row{flex-direction:row;flex-wrap:wrap}
+  .option{
+    display:flex;align-items:center;gap:.6rem;padding:.6rem .9rem;
+    border:1.5px solid var(--border);border-radius:8px;cursor:pointer;transition:.15s;
+    font-size:.9rem;
+  }
+  .option:hover{border-color:var(--accent);background:#f1f5f9}
+  .option.selected{border-color:var(--accent);background:#eff6ff;font-weight:600}
+  .option input[type=radio],.option input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+  .option label{cursor:pointer;flex:1}
+
+  /* Nav buttons */
+  .nav{display:flex;gap:.75rem;margin-top:1.5rem;flex-wrap:wrap}
+  .btn{
+    padding:.6rem 1.5rem;border-radius:8px;font-size:.9rem;font-weight:600;
+    border:none;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:.4rem;
+  }
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover:not(:disabled){background:#1d4ed8}
+  .btn-outline{background:transparent;color:var(--text);border:1.5px solid var(--border)}
+  .btn-outline:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  .btn-success{background:var(--green);color:#fff}
+  .btn-success:hover:not(:disabled){background:#15803d}
+
+  /* Report / Result */
+  .result-summary{text-align:center;padding:1.5rem 0}
+  .score-ring{
+    width:130px;height:130px;border-radius:50%;display:inline-flex;align-items:center;
+    justify-content:center;font-size:2.2rem;font-weight:800;margin-bottom:.75rem;
+    border:6px solid var(--border);position:relative;
+  }
+  .score-ring .label{position:absolute;bottom:-1.6rem;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .veredict{font-size:1.2rem;font-weight:700;margin-bottom:.25rem}
+  .veredict-desc{font-size:.9rem;color:var(--muted);margin-bottom:1rem}
+
+  .category-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin:1rem 0}
+  @media(max-width:500px){.category-grid{grid-template-columns:1fr}}
+  .cat-item{
+    padding:.65rem .9rem;border-radius:8px;border:1.5px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .cat-item .name{font-size:.82rem;font-weight:600;color:var(--muted)}
+  .cat-item .score{font-size:.95rem;font-weight:700}
+  .cat-item .score.ok{color:var(--green)}
+  .cat-item .score.warn{color:var(--amber)}
+  .cat-item .score.bad{color:var(--red)}
+
+  .red-flags{margin:1rem 0}
+  .red-flag{
+    background:#fef2f2;border-left:4px solid var(--red);padding:.7rem 1rem;
+    border-radius:0 8px 8px 0;margin-bottom:.5rem;font-size:.88rem;line-height:1.45;
+  }
+  .red-flag strong{color:var(--red)}
+
+  .rec-list{margin:1rem 0 0}
+  .rec-item{
+    background:#f0fdf4;border-left:4px solid var(--green);padding:.6rem .9rem;
+    border-radius:0 8px 8px 0;margin-bottom:.4rem;font-size:.85rem;line-height:1.45;
+  }
+
+  .detail-toggle{
+    background:none;border:none;color:var(--accent);font-size:.85rem;font-weight:600;
+    cursor:pointer;padding:.25rem 0;margin-top:.5rem;
+  }
+  .detail-table{width:100%;border-collapse:collapse;margin:.5rem 0;font-size:.82rem}
+  .detail-table th,.detail-table td{padding:.4rem .6rem;text-align:left;border-bottom:1px solid var(--border)}
+  .detail-table th{font-weight:600;color:var(--muted)}
+
+  .review-question{
+    padding:.6rem 0;border-bottom:1px solid var(--border);font-size:.88rem;
+    display:flex;justify-content:space-between;gap:1rem;
+  }
+  .review-question:last-child{border-bottom:none}
+  .review-question .rq-q{color:var(--text);flex:1}
+  .review-question .rq-a{font-weight:600;text-align:right;flex-shrink:0}
+  .review-question .rq-a.sim{color:var(--green)}
+  .review-question .rq-a.nao{color:var(--red)}
+
+  .divider{border:none;border-top:1px solid var(--border);margin:1rem 0}
+
+  .empty-state{text-align:center;padding:2rem 0;color:var(--muted)}
+  .empty-state p{font-size:.95rem}
+
+  /* Flag counters */
+  .flag-counter{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin:1rem 0}
+  .flag-badge{display:flex;align-items:center;gap:.4rem;padding:.5rem 1rem;border-radius:999px;font-size:.85rem;font-weight:700}
+  .flag-badge.red{background:#fef2f2;color:var(--red);border:1px solid #fecaca}
+  .flag-badge.yellow{background:#fffbeb;color:var(--amber);border:1px solid #fde68a}
+  .flag-badge.green{background:#f0fdf4;color:var(--green);border:1px solid #bbf7d0}
+  .flag-badge .num{font-size:1.3rem;font-weight:800}
+  .flag-legend{display:flex;flex-direction:column;gap:.3rem;margin:1rem 0;padding:1rem;background:#f8fafc;border-radius:8px;font-size:.82rem;color:var(--muted)}
+  .flag-legend .row{display:flex;align-items:center;gap:.5rem}
+  .flag-legend .dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+  .flag-legend .dot.red{background:var(--red)}
+  .flag-legend .dot.yellow{background:var(--amber)}
+  .flag-legend .dot.green{background:var(--green)}
+
+  /* Admin button */
+  .admin-bar{text-align:center;padding:.5rem 0;margin-top:.5rem}
+  .admin-bar .btn{font-size:.75rem;padding:.3rem .8rem;background:var(--border);color:var(--muted);border:none;border-radius:6px;cursor:pointer}
+  .admin-bar .btn:hover{background:#cbd5e1;color:var(--text)}
+
+  /* Modal de envio */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem}
+  .modal{background:var(--card);border-radius:var(--radius);box-shadow:0 20px 60px rgba(0,0,0,.25);padding:2rem;max-width:480px;width:100%;max-height:90vh;overflow-y:auto}
+  .modal h3{font-size:1.1rem;font-weight:700;margin-bottom:.25rem}
+  .modal .desc{font-size:.85rem;color:var(--muted);margin-bottom:1.25rem}
+  .modal .field{margin-bottom:1rem}
+  .modal .field label{display:block;font-size:.82rem;font-weight:600;margin-bottom:.3rem;color:var(--text)}
+  .modal .field input{width:100%;padding:.6rem .8rem;border:1.5px solid var(--border);border-radius:8px;font-size:.9rem;transition:.15s}
+  .modal .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+  .modal .field .error{font-size:.75rem;color:var(--red);margin-top:.2rem;display:none}
+  .modal .nav{margin-top:1.5rem}
+  .modal.hidden{display:none}
+  .modal-overlay.hidden{display:none}
+  .hidden{display:none!important}
+  .modal .success-box{text-align:center;padding:1.5rem 0}
+  .modal .success-box .icon{font-size:3rem;margin-bottom:.5rem}
+  .modal .success-box h4{font-size:1.1rem;font-weight:700;margin-bottom:.25rem}
+  .modal .success-box p{font-size:.85rem;color:var(--muted);margin-bottom:1rem}
+  .modal .btn-block{width:100%;justify-content:center}
+  .modal .spinner{width:40px;height:40px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 1rem}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Print */
+  @media print{
+    .steps-bar,.nav,.no-print{display:none!important}
+    .card{box-shadow:none;border:1px solid #ddd;break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<header>
+<div class="container">
+  <h1>PPWR Checker</h1>
+  <span class="badge">v1.0</span>
+  <p>Verificação de conformidade com o Regulamento Europeu de Embalagens e Resíduos de Embalagens</p>
+</div>
+</header>
+
+<div class="steps-bar" id="stepsBar">
+<div class="container" id="stepsContainer"></div>
+</div>
+
+<main class="container" id="app"></main>
+
+<script>
+'use strict';
+
+/* ============================================================
+   PPWR Questions — 7 seções, mapeadas aos artigos do regulamento
+   ============================================================ */
+
+const SECTIONS = [
+  { id:'ident',  label:'Identificação'  },
+  { id:'materiais', label:'Materiais' },
+  { id:'reciclabilidade', label:'Reciclabilidade' },
+  { id:'reciclado', label:'Conteúdo Reciclado' },
+  { id:'minimizacao', label:'Minimização' },
+  { id:'rotulagem', label:'Rotulagem' },
+  { id:'substancias', label:'Substâncias' },
+];
+
+const QUESTIONS = [
+  /* -------- IDENTIFICAÇÃO -------- */
+  {
+    id:'produto', section:'ident', required:true,
+    text:'Qual o tipo de produto embalado?',
+    hint:'Ex.: alimentos, bebidas, cosméticos, químicos, peças industriais',
+    type:'select', options:['Alimentos / Bebidas','Cosméticos / Higiene','Produtos Químicos / Limpeza','Farmacêutico','Eletrônicos','Peças Industriais','Papel e Celulose','Outro'],
+  },
+  {
+    id:'destinos', section:'ident', required:true,
+    text:'Para qual(is) país(es) da UE o produto será exportado?',
+    hint:'Selecione todos que se aplicam. A interpretação da PPWR pode variar por país.',
+    type:'checkbox', options:['Alemanha','França','Itália','Espanha','Países Baixos','Bélgica','Áustria','Suécia','Polônia','Outro país UE'],
+  },
+  {
+    id:'volume', section:'ident', required:true,
+    text:'Volume anual estimado de embalagens no mercado europeu',
+    hint:'Em unidades ou kg — ajuda a dimensionar o impacto das exigências',
+    type:'select', options:['< 1.000 unidades/ano','1.000 — 10.000','10.000 — 100.000','100.000 — 1.000.000','> 1.000.000 unidades/ano'],
+  },
+  {
+    id:'tipo_emb', section:'ident', required:true,
+    text:'Tipo de embalagem que será avaliada',
+    hint:'Pode avaliar cada tipo separadamente se houver mais de um',
+    type:'select', options:['Embalagem primária (contato direto)','Embalagem secundária (agrupamento)','Embalagem terciária (transporte)','Embalagem primária + secundária'],
+  },
+
+  /* -------- MATERIAIS -------- */
+  {
+    id:'material_principal', section:'materiais', required:true,
+    text:'Qual o material principal da embalagem?',
+    type:'select',
+    options:['Plástico','Papel / Cartão','Vidro','Metal (alumínio)','Metal (aço/folha-de-flandres)','Madeira','Multimaterial / Combinado'],
+  },
+  {
+    id:'plastico_tipo', section:'materiais', required:false,
+    text:'[Se plástico] Qual tipo de plástico predomina?',
+    hint:'Identificar corretamente é crítico para metas de conteúdo reciclado',
+    type:'select',
+    options:['PET','HDPE (PEAD)','PP','PS','EPS / Isopor','PVC','PLA / Bioplástico','Multicamadas plásticas','Outro plástico'],
+    depends: (a) => a.material_principal === 'Plástico',
+  },
+  {
+    id:'multicamadas', section:'materiais', required:true,
+    text:'A embalagem possui múltiplas camadas de materiais diferentes?',
+    hint:'Ex.: plástico + alumínio + papel (tipo Tetra Pak) ou plástico multicamada',
+    type:'radio', options:[{v:'sim',l:'Sim — camadas de materiais distintos'},{v:'nao',l:'Não — material único ou camadas do mesmo material'},{v:'nsei',l:'Não sei'}],
+  },
+  {
+    id:'camadas_separaveis', section:'materiais', required:false,
+    text:'[Se multicamadas] As camadas são separáveis manualmente ou mecanicamente?',
+    hint:'A PPWR exige que componentes sejam separáveis para reciclagem',
+    type:'radio', options:[{v:'sim',l:'Sim, são separáveis'},{v:'nao',l:'Não, são inseparáveis'},{v:'nsei',l:'Não sei'}],
+    depends: (a) => a.multicamadas === 'sim',
+  },
+  {
+    id:'revestimento', section:'materiais', required:true,
+    text:'A embalagem contém revestimentos, tintas ou vernizes que podem comprometer a reciclagem?',
+    hint:'Revestimentos metálicos, barreira química, tintas de impressão extensivas',
+    type:'radio', options:[{v:'sim',l:'Sim'},{v:'nao',l:'Não'},{v:'nsei',l:'Não sei'}],
+  },
+
+  /* -------- RECICLABILIDADE -------- */
+  {
+    id:'design_reciclagem', section:'reciclabilidade', required:true,
+    text:'A embalagem foi projetada para reciclagem conforme normas EN 13430 ou EN 13431?',
+    hint:'Critério-chave da PPWR — toda embalagem deve ser reciclável até 2030',
+    type:'radio', options:[{v:'sim',l:'Sim — projetada para reciclagem'},{v:'parcial',l:'Parcialmente — alguns componentes recicláveis'},{v:'nao',l:'Não — não foi projetada para reciclagem'},{v:'nsei',l:'Não sei'}],
+  },
+  {
+    id:'coleta_pais', section:'reciclabilidade', required:true,
+    text:'Existe sistema de coleta, triagem e reciclagem estabelecido para este tipo de embalagem no(s) país(es) de destino?',
+    type:'radio', options:[{v:'sim',l:'Sim — sistema consolidado'},{v:'parcial',l:'Parcialmente — existe mas com limitações'},{v:'nao',l:'Não — não há infraestrutura'},{v:'nsei',l:'Não sei'}],
+  },
+  {
+    id:'rotulo_separavel', section:'reciclabilidade', required:true,
+    text:'O rótulo / adesivo é removível no processo de reciclagem?',
+    hint:'Rótulos não removíveis (sleeves, adesivos permanentes) contaminam o fluxo',
+    type:'radio', options:[{v:'sim',l:'Sim — removível'},{v:'nao',l:'Não — não removível'},{v:'nsei',l:'Não sei'}],
+  },
+  {
+    id:'tampa_mesmo_material', section:'reciclabilidade', required:false,
+    text:'A tampa / fechamento é do mesmo material que o corpo principal?',
+    hint:'Componentes de materiais diferentes dificultam a reciclagem monofluxo',
+    type:'radio', options:[{v:'sim',l:'Sim — mesmo material'},{v:'nao',l:'Não — material diferente'},{v:'nsei',l:'Não se aplica / não tem tampa'}],
+  },
+  {
+    id:'proj_reutilizacao', section:'reciclabilidade', required:false,
+    text:'A embalagem é projetada para reutilização (retornável / refill)?',
+    hint:'PPWR incentiva reutilização. Metas específicas para embalagens de transporte e grouped packaging',
+    type:'radio', options:[{v:'sim',l:'Sim'},{v:'parcial',l:'Parcialmente'},{v:'nao',l:'Não'}],
+  },
+
+  /* -------- CONTEÚDO RECICLADO -------- */
+  {
+    id:'pcr_percentual', section:'reciclado', required:true,
+    text:'[Se plástico] Qual a porcentagem de conteúdo reciclado pós-consumo (PCR) na embalagem plástica?',
+    hint:'PPWR: 30% até 2030 / 65% até 2040 para contato com alimento; 10%/50% para demais. Se não for plástico, selecione "Não se aplica"',
+    type:'select',
+    options:['0% — Sem PCR','< 10% PCR','10% — 30% PCR','30% — 50% PCR','> 50% PCR','Não se aplica (embalagem não plástica)'],
+  },
+  {
+    id:'pcr_certificado', section:'reciclado', required:false,
+    text:'O fornecedor do material PCR possui certificação (ex.: EN 15343, RecyClass, ISCC PLUS)?',
+    hint:'Para contagem de PCR a PPWR pode exigir rastreabilidade certificada',
+    type:'radio', options:[{v:'sim',l:'Sim — certificado'},{v:'nao',l:'Não'},{v:'nsei',l:'Não sei'},{v:'na',l:'Não se aplica'}],
+    depends: (a) => a.material_principal === 'Plástico',
+  },
+
+  /* -------- MINIMIZAÇÃO -------- */
+  {
+    id:'peso_minimo', section:'minimizacao', required:true,
+    text:'A embalagem foi projetada para peso e volume mínimos necessários (otimização)?',
+    hint:'PPWR exige que embalagens sejam minimizadas sem comprometer segurança e funcionalidade',
+    type:'radio', options:[{v:'sim',l:'Sim — otimizada'},{v:'parcial',l:'Parcialmente — pode reduzir mais'},{v:'nao',l:'Não — há excesso de material'},{v:'nsei',l:'Não sei'}],
+  },
+  {
+    id:'espaco_vazio', section:'minimizacao', required:true,
+    text:'Existe espaço vazio excessivo (overpackaging — "empty space ratio")?',
+    hint:'PPWR prevê limites para a proporção de espaço vazio em embalagens agrupadas',
+    type:'radio', options:[{v:'nao',l:'Não — espaço mínimo'},{v:'sim_pouco',l:'Sim — mas justificável (proteção)'},{v:'sim_muito',l:'Sim — espaço vazio significativo e desnecessário'},{v:'nsei',l:'Não sei'}],
+  },
+
+  /* -------- ROTULAGEM -------- */
+  {
+    id:'ident_material', section:'rotulagem', required:true,
+    text:'A embalagem possui identificação do material (código numérico / abreviação, ex.: 1-PET, 2-HDPE, PAP 20, etc.)?',
+    type:'radio', options:[{v:'sim',l:'Sim'},{v:'nao',l:'Não'},{v:'nsei',l:'Não sei'}],
+  },
+  {
+    id:'instrucoes_descarte', section:'rotulagem', required:true,
+    text:'Possui instruções de descarte / separação para o consumidor?',
+    type:'radio', options:[{v:'sim',l:'Sim'},{v:'nao',l:'Não'},{v:'nsei',l:'Não sei'}],
+  },
+  {
+    id:'rotulagem_na_lingua', section:'rotulagem', required:true,
+    text:'As informações de rotulagem estão no(s) idioma(s) do país de destino?',
+    hint:'Exigência da UE: informações ao consumidor devem estar no idioma oficial do estado-membro',
+    type:'radio', options:[{v:'sim',l:'Sim'},{v:'nao',l:'Não'},{v:'nsei',l:'Não sei'}],
+  },
+
+  /* -------- SUBSTÂNCIAS -------- */
+  {
+    id:'metais_pesados', section:'substancias', required:true,
+    text:'A embalagem está em conformidade com os limites de metais pesados?',
+    hint:'PPWR: Pb+Cd+Hg+Cr VI < 100 ppm em peso. Pergunte ao fornecedor se não souber.',
+    type:'radio', options:[{v:'sim',l:'Sim — dentro dos limites'},{v:'nao',l:'Não — acima do limite'},{v:'nsei',l:'Não verificado / não sei'}],
+  },
+  {
+    id:'reach_svhc', section:'substancias', required:true,
+    text:'A embalagem está em conformidade com REACH (SVHC — substâncias de alta preocupação)?',
+    type:'radio', options:[{v:'sim',l:'Sim — conforme'},{v:'nao',l:'Não conforme'},{v:'nsei',l:'Não verificado'}],
+  },
+  {
+    id:'certificacao', section:'substancias', required:true,
+    text:'A embalagem possui alguma certificação de origem / sustentabilidade?',
+    hint:'FSC/PEFC (papel), ISCC (plástico), Cradle-to-Cradle, etc.',
+    type:'checkbox', options:['FSC (papel/cartão)','PEFC (papel/cartão)','ISCC PLUS','OK Compost / Compostável','Cradle-to-Cradle','Nenhuma','Outra'],
+  },
+];
+
+/* ============================================================
+   Scoring Engine
+   ============================================================ */
+
+const WEIGHTS = {
+  reciclabilidade: 30,
+  reciclado: 25,
+  minimizacao: 15,
+  submateriais: 10,  // separação de componentes (camadas separáveis, revestimentos)
+  rotulagem: 10,
+  substancias: 10,
+};
+
+/* ---- Per-answer points ---- */
+function pointsFor(qId, answer) {
+  /* Each answer maps to 0–100 for that question.
+     Used within category averaging. */
+  const map = {
+    // Radios 3-4 opções
+    design_reciclagem:      { sim:100, parcial:40, nao:0, nsei:20 },
+    coleta_pais:            { sim:100, parcial:50, nao:0, nsei:20 },
+    rotulo_separavel:       { sim:100, nao:0, nsei:20 },
+    tampa_mesmo_material:   { sim:100, nao:0, nsei:50 },
+    proj_reutilizacao:      { sim:100, parcial:40, nao:0 },
+    multicamadas:           { sim:30, nao:100, nsei:40 },
+    camadas_separaveis:     { sim:100, nao:0, nsei:20 },
+    revestimento:           { sim:0, nao:100, nsei:30 },
+    pcr_certificado:        { sim:100, nao:40, nsei:20, na:100 },
+    peso_minimo:            { sim:100, parcial:50, nao:0, nsei:30 },
+    espaco_vazio:           { nao:100, sim_pouco:60, sim_muito:0, nsei:30 },
+    ident_material:         { sim:100, nao:0, nsei:20 },
+    instrucoes_descarte:    { sim:100, nao:0, nsei:20 },
+    rotulagem_na_lingua:    { sim:100, nao:0, nsei:20 },
+    metais_pesados:         { sim:100, nao:0, nsei:30 },
+    reach_svhc:             { sim:100, nao:0, nsei:30 },
+  };
+  if (map[qId] && map[qId][answer] !== undefined) return map[qId][answer];
+  // fallback: select / checkbox — already partial
+  return 50;
+}
+
+/* ---- Scoring function ---- */
+function scoreAnswers(answers) {
+  const cats = { reciclabilidade:[], submateriais:[], reciclado:[], minimizacao:[], rotulagem:[], substancias:[] };
+
+  // Distribute questions to categories
+  const qCat = {
+    design_reciclagem:'reciclabilidade', coleta_pais:'reciclabilidade',
+    rotulo_separavel:'reciclabilidade', tampa_mesmo_material:'reciclabilidade',
+    proj_reutilizacao:'reciclabilidade',
+    multicamadas:'submateriais', camadas_separaveis:'submateriais', revestimento:'submateriais',
+    pcr_percentual:'reciclado', pcr_certificado:'reciclado',
+    peso_minimo:'minimizacao', espaco_vazio:'minimizacao',
+    ident_material:'rotulagem', instrucoes_descarte:'rotulagem', rotulagem_na_lingua:'rotulagem',
+    metais_pesados:'substancias', reach_svhc:'substancias',
+  };
+
+  // Also map cert answer into pcr_percentual for scoring
+  const pcrScore = {
+    '0% — Sem PCR':0, '< 10% PCR':15, '10% — 30% PCR':40, '30% — 50% PCR':70, '> 50% PCR':100, 'Não se aplica (embalagem não plástica)':100,
+  };
+
+  for (const [qId, answer] of Object.entries(answers)) {
+    const cat = qCat[qId];
+    if (!cat) continue;
+    if (answers.material_principal !== 'Plástico' && cat === 'reciclado') {
+      // Not plastic → PCR category auto-approves
+      cats.reciclado.push(100);
+      continue;
+    }
+    if (qId === 'pcr_percentual') {
+      const s = pcrScore[answer];
+      if (s !== undefined) cats.reciclado.push(s);
+      continue;
+    }
+    cats[cat].push(pointsFor(qId, answer));
+  }
+
+  // Compute weighted score
+  const catScores = {};
+  let totalWeight = 0, weightedSum = 0;
+
+  for (const [cat, pts] of Object.entries(cats)) {
+    if (pts.length === 0) continue;
+    const avg = Math.round(pts.reduce((a,b)=>a+b,0) / pts.length);
+    catScores[cat] = avg;
+    const w = WEIGHTS[cat] || 5;
+    totalWeight += w;
+    weightedSum += avg * w;
+  }
+
+  const overall = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+  return { overall, catScores };
+}
+
+/* ---- Red flags ---- */
+function findRedFlags(answers) {
+  const flags = [];
+  // Plastic sem PCR mínimo
+  if (answers.material_principal === 'Plástico') {
+    const pcr = answers.pcr_percentual;
+    if (pcr && (pcr === '0% — Sem PCR' || pcr === '< 10% PCR')) {
+      flags.push('Embalagem plástica com <strong>menos de 10% de PCR</strong> — a PPWR exige no mínimo 10% (demais) ou 30% (contato com alimento) até 2030.');
+    }
+  }
+  if (answers.design_reciclagem === 'nao') {
+    flags.push('Embalagem <strong>não projetada para reciclagem</strong> — toda embalagem deve ser reciclável até 2030 (Art. 6-7 PPWR). Risco alto de não conformidade.');
+  }
+  if (answers.multicamadas === 'sim' && answers.camadas_separaveis === 'nao') {
+    flags.push('Multicamadas <strong>inseparáveis</strong> — componentes de diferentes materiais não separáveis comprometem a reciclabilidade e violam o Art. 7 da PPWR.');
+  }
+  if (answers.metais_pesados === 'nao') {
+    flags.push('Metais pesados <strong>acima do limite</strong> (Pb+Cd+Hg+Cr VI > 100 ppm) — a embalagem está em não conformidade imediata com a PPWR.');
+  }
+  if (answers.reach_svhc === 'nao') {
+    flags.push('Substâncias SVHC <strong>não conformes com REACH</strong> — risco regulatório grave. Embargável na fronteira UE.');
+  }
+  if (answers.rotulo_separavel === 'nao') {
+    flags.push('Rótulo/adesivo <strong>não removível</strong> — pode contaminar o fluxo de reciclagem. Considere trocar por rótulo removível ou compatível com o material.');
+  }
+  if (answers.peso_minimo === 'nao') {
+    flags.push('Embalagem <strong>não otimizada</strong> — há excesso de material identificado. A PPWR exige minimização de peso e volume (Art. 10).');
+  }
+  return flags;
+}
+
+/* ---- Recommendations ---- */
+function generateRecs(answers, score) {
+  const recs = [];
+  if (answers.design_reciclagem !== 'sim') {
+    recs.push('Avaliar redesign da embalagem para atender critérios de reciclabilidade (EN 13430/13431). Consulte um laboratório especializado em ecodesign.');
+  }
+  if (answers.material_principal === 'Plástico' && (!answers.pcr_percentual || answers.pcr_percentual.startsWith('0') || answers.pcr_percentual.startsWith('< 10'))) {
+    recs.push('Iniciar transição para plástico com PCR certificado. Entre em contato com fornecedores de resina reciclada (ex.: ISCC PLUS).');
+  }
+  if (answers.multicamadas === 'sim' && answers.camadas_separaveis === 'nao') {
+    recs.push('Avaliar substituição por material monomaterial ou desenvolver solução de separabilidade mecânica.');
+  }
+  if (answers.metais_pesados === 'nsei') {
+    recs.push('Solicitar declaração de conformidade de metais pesados junto ao fornecedor da embalagem.');
+  }
+  if (answers.reach_svhc === 'nsei') {
+    recs.push('Solicitar declaração REACH/SVHC do fornecedor. Mantenha documentação arquivada para fiscalização.');
+  }
+  if (answers.ident_material !== 'sim') {
+    recs.push('Adicionar código de identificação de material na embalagem (ex.: 1-PET, PAP 20).');
+  }
+  if (answers.instrucoes_descarte !== 'sim') {
+    recs.push('Incluir instruções de descarte/separação para o consumidor final, no idioma do país de destino.');
+  }
+  if (answers.rotulagem_na_lingua !== 'sim') {
+    recs.push('Traduzir a rotulagem para o(s) idioma(s) oficial(is) do(s) país(es) de destino na UE.');
+  }
+  if (answers.peso_minimo === 'nao' || answers.peso_minimo === 'parcial') {
+    recs.push('Conduzir análise de minimização de embalagem (weight/volume reduction audit).');
+  }
+  if (answers.espaco_vazio === 'sim_muito' || answers.espaco_vazio === 'sim_pouco') {
+    recs.push('Reduzir proporção de espaço vazio (empty space ratio) para atender aos requisitos da PPWR.');
+  }
+  if (answers.certificacao && Array.isArray(answers.certificacao) && (answers.certificacao.length === 0 || answers.certificacao.includes('Nenhuma'))) {
+    recs.push('Buscar certificação de origem/sustentabilidade (FSC para papel, ISCC para plástico) para fortalecer conformidade.');
+  }
+  // General
+  if (score.overall < 50) {
+    recs.push('Recomendado contratar auditoria técnica independente de conformidade PPWR antes de protocolar lote na fronteira da UE.');
+  }
+  return recs.slice(0,6);
+}
+
+/* ============================================================
+   UI State & Rendering
+   ============================================================ */
+
+let state = {
+  step: 0,            // index in SECTIONS
+  qIdx: 0,            // question index within section
+  answers: {},
+  report: null,
+  stage: 'quiz',      // 'quiz' | 'review' | 'result'
+};
+
+/* Question visibility */
+function isVisible(q) {
+  if (!q.depends) return true;
+  return q.depends(state.answers);
+}
+
+/* Current section's visible questions */
+function visibleQuestions(sectionIdx) {
+  const sec = SECTIONS[sectionIdx];
+  return QUESTIONS.filter(q => q.section === sec.id && isVisible(q));
+}
+
+function totalQuestions(sectionIdx) {
+  const sec = SECTIONS[sectionIdx];
+  return QUESTIONS.filter(q => q.section === sec.id).length;
+}
+
+/* Render step dots */
+function renderSteps() {
+  const c = document.getElementById('stepsContainer');
+  const currentSecIdx = state.stage === 'result' ? SECTIONS.length-1 : state.step;
+  let html = '';
+  SECTIONS.forEach((s, i) => {
+    const cls = i < currentSecIdx ? 'done' : i === currentSecIdx ? 'active' : '';
+    html += `<span class="step-dot ${cls}"><span class="circle">${i+1}</span>${s.label}</span>`;
+    if (i < SECTIONS.length-1) html += `<span class="step-line ${i < currentSecIdx ? 'done' : ''}"></span>`;
+  });
+  c.innerHTML = html;
+}
+
+/* --- Main render --- */
+function render() {
+  renderSteps();
+  const app = document.getElementById('app');
+
+  if (state.stage === 'quiz') return renderQuiz(app);
+  if (state.stage === 'review') return renderReview(app);
+  if (state.stage === 'result') return renderResult(app);
+}
+
+function getAnswerLabel(qId, answer) {
+  const q = QUESTIONS.find(q => q.id === qId);
+  if (!q) return String(answer);
+  if (q.type === 'radio') {
+    const opt = q.options.find(o => o.v === answer);
+    return opt ? opt.l : String(answer);
+  }
+  return String(answer);
+}
+
+/* ----- QUIZ ----- */
+function renderQuiz(container) {
+  const qs = visibleQuestions(state.step);
+  if (qs.length === 0) {
+    // skip empty section
+    state.step++;
+    render();
+    return;
+  }
+  const q = qs[state.qIdx];
+  const section = SECTIONS[state.step];
+  const total = qs.length;
+  const pct = total > 1 ? Math.round((state.qIdx / (total-1))*100) : 100;
+
+  let html = `
+  <div class="card">
+    <h2>${section.label}</h2>
+    <p class="desc">${state.qIdx+1} de ${total} perguntas</p>
+    <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:1.25rem;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:2px;transition:.3s"></div>
+    </div>
+    <div class="question">
+      <div class="q-text">${q.text}</div>
+      ${q.hint ? `<div class="q-hint">💡 ${q.hint}</div>` : ''}
+      <div class="options ${q.type==='radio'||q.type==='select'?'':'row'}">
+  `;
+
+  const currentAnswer = state.answers[q.id];
+
+  if (q.type === 'select') {
+    html += `<select id="q-${q.id}" style="width:100%;padding:.6rem .9rem;border:1.5px solid var(--border);border-radius:8px;font-size:.9rem;background:white" onchange="saveAnswer('${q.id}', this.value)">
+      <option value="">— Selecione —</option>
+    `;
+    q.options.forEach(o => {
+      html += `<option value="${o}" ${currentAnswer===o?'selected':''}>${o}</option>`;
+    });
+    html += `</select>`;
+  } else if (q.type === 'radio') {
+    q.options.forEach(o => {
+      const sel = currentAnswer === o.v ? 'selected' : '';
+      html += `<div class="option ${sel}" onclick="saveAnswer('${q.id}','${o.v}')">
+        <input type="radio" name="q-${q.id}" value="${o.v}" ${currentAnswer===o.v?'checked':''}>
+        ${o.l}
+      </div>`;
+    });
+  } else if (q.type === 'checkbox') {
+    const sel = currentAnswer || [];
+    q.options.forEach(o => {
+      const checked = sel.includes(o) ? 'checked' : '';
+      html += `<div class="option ${checked?'selected':''}">
+        <input type="checkbox" value="${o}" ${checked} onchange="toggleCheckbox('${q.id}','${o}',this.checked)">
+        ${o}
+      </div>`;
+    });
+  }
+
+  html += `
+      </div>
+    </div>
+    <div class="nav">
+      ${state.qIdx > 0 ? `<button class="btn btn-outline" onclick="prevQuestion()">← Anterior</button>` : (state.step > 0 ? `<button class="btn btn-outline" onclick="prevSection()">← ${SECTIONS[state.step-1].label}</button>` : `<span></span>`)}
+      <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">${state.qIdx < total-1 ? 'Próxima →' : 'Avançar →'}</button>
+    </div>
+  </div>`;
+
+  container.innerHTML = html;
+
+  // Enable/disable next
+  const nextBtn = document.getElementById('nextBtn');
+  if (nextBtn) {
+    const hasAnswer = state.answers[q.id] !== undefined &&
+      (q.type === 'select' ? state.answers[q.id] !== '' : true) &&
+      (q.type === 'checkbox' ? (state.answers[q.id] || []).length > 0 : true);
+    nextBtn.disabled = !hasAnswer;
+  }
+}
+
+/* ----- REVIEW ----- */
+function renderReview(container) {
+  const score = scoreAnswers(state.answers);
+  const flags = findRedFlags(state.answers);
+  const recs = generateRecs(state.answers, score);
+
+  container.innerHTML = `
+  <div class="card">
+    <h2>📋 Revisão das Respostas</h2>
+    <p class="desc">Confirme os dados antes da análise. Clique em <strong>Editar</strong> para voltar a uma pergunta.</p>
+    <div id="reviewList"></div>
+    <hr class="divider">
+    <div class="result-summary">
+      <div class="score-ring" style="border-color:${score.overall<40?'var(--red)':score.overall<70?'var(--amber)':'var(--green)'}">
+        ${score.overall}%
+        <span class="label">Score preliminar</span>
+      </div>
+    </div>
+    ${flags.length ? `<div class="red-flags"><h3 style="font-size:.9rem;color:var(--red);margin-bottom:.5rem">⚠️ Bandeiras Vermelhas</h3>${flags.map(f=>`<div class="red-flag">${f}</div>`).join('')}</div>` : ''}
+    <div class="nav">
+      <button class="btn btn-outline" onclick="editAnswers()">✏️ Editar respostas</button>
+      <button class="btn btn-success" onclick="confirmAndAnalyze()">✅ Confirmar e analisar</button>
+    </div>
+  </div>`;
+
+  // Populate review list
+  const list = document.getElementById('reviewList');
+  let rHtml = '';
+  QUESTIONS.forEach(q => {
+    if (!isVisible(q)) return;
+    const a = state.answers[q.id];
+    if (a === undefined) return;
+    let display = Array.isArray(a) ? a.map(v => getAnswerLabel(q.id, v)).join(', ') : getAnswerLabel(q.id, a);
+    if (display === '') display = '<em style="color:var(--muted)">não respondida</em>';
+    rHtml += `<div class="review-question"><span class="rq-q">${q.text}</span><span class="rq-a">${display}</span></div>`;
+  });
+  list.innerHTML = rHtml;
+}
+
+/* ----- RESULT ----- */
+function renderResult(container) {
+  const score = state.report || scoreAnswers(state.answers);
+  const flags = findRedFlags(state.answers);
+
+  const color = score.overall<40?'var(--red)':score.overall<70?'var(--amber)':'var(--green)';
+  const veredicts = [
+    { max:30, label:'Alto Risco — Não Conforme', desc:'A embalagem apresenta não conformidades críticas com a PPWR. Risco elevado de embargo na fronteira da UE.' },
+    { max:55, label:'Risco Moderado — Necessita Melhorias', desc:'A conformidade é parcial. Diversos pontos precisam de ação imediata antes da exportação.' },
+    { max:75, label:'Risco Baixo — Quase Conforme', desc:'A embalagem está majoritariamente conforme. Ajustes pontuais resolvem as pendências.' },
+    { max:100, label:'Risco Baixo — Bem Posicionado', desc:'A embalagem está bem posicionada para conformidade com a PPWR. Mantenha a documentação atualizada.' },
+  ];
+  const v = veredicts.find(v => score.overall <= v.max) || veredicts[veredicts.length-1];
+
+  // Count flags by category score
+  let redCount = 0, yellowCount = 0, greenCount = 0;
+  for (const pts of Object.values(score.catScores)) {
+    if (pts === undefined) continue;
+    if (pts < 40) redCount++;
+    else if (pts < 70) yellowCount++;
+    else greenCount++;
+  }
+  // Also count critical red flags from findRedFlags
+  const criticalFlags = flags.length;
+
+  container.innerHTML = `
+  <div class="card">
+    <h2>📊 Relatório PPWR</h2>
+    <p class="desc">Análise de conformidade gerada em ${new Date().toLocaleString('pt-BR')}</p>
+
+    <div class="result-summary">
+      <div class="score-ring" style="border-color:${color}">
+        ${score.overall}%
+        <span class="label">Score PPWR</span>
+      </div>
+      <div class="veredict" style="color:${color}">${v.label}</div>
+      <div class="veredict-desc">${v.desc}</div>
+    </div>
+
+    <div class="flag-counter">
+      <div class="flag-badge red"><span class="num">${criticalFlags + redCount}</span> 🔴 Críticas</div>
+      <div class="flag-badge yellow"><span class="num">${yellowCount}</span> 🟡 Atenção</div>
+      <div class="flag-badge green"><span class="num">${greenCount}</span> 🟢 Conforme</div>
+    </div>
+
+    <div class="flag-legend">
+      <div class="row"><span class="dot red"></span> <strong>Críticas:</strong> Não conformidades graves que exigem ação imediata</div>
+      <div class="row"><span class="dot yellow"></span> <strong>Atenção:</strong> Pontos que precisam de melhoria para conformidade total</div>
+      <div class="row"><span class="dot green"></span> <strong>Conforme:</strong> Categorias que atendem aos requisitos da PPWR</div>
+    </div>
+
+    <hr class="divider">
+
+    <div style="text-align:center;padding:.5rem 0">
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:.25rem">📄 Relatório detalhado disponível por e-mail</p>
+      <p style="font-size:.8rem;color:var(--muted)">Preencha seus dados e receba o relatório completo em PDF com todas as análises,<br>bandeiras, recomendações e detalhamento por pergunta.</p>
+    </div>
+
+    <hr class="divider">
+
+    <div class="nav no-print">
+      <button class="btn btn-outline" onclick="resetAll()">🔄 Nova verificação</button>
+      <button class="btn btn-success" onclick="openSendReport()">📧 Receber relatório completo por e-mail</button>
+    </div>
+    <p style="font-size:.72rem;color:var(--muted);margin-top:1rem;text-align:center">
+      ⚠️ Esta ferramenta fornece uma análise indicativa. Consulte um especialista jurídico em compliance da UE para decisões formais.
+    </p>
+  </div>
+
+  <!-- Admin bar -->
+  <div class="admin-bar no-print">
+    <button class="btn" onclick="exportLeads()">📋 Exportar leads (CSV)</button>
+  </div>`;
+}
+
+/* ============================================================
+   Actions
+   ============================================================ */
+
+function saveAnswer(id, value) {
+  state.answers[id] = value;
+  renderQuestionOnly();
+}
+
+function toggleCheckbox(id, value, checked) {
+  if (!state.answers[id]) state.answers[id] = [];
+  const arr = state.answers[id];
+  if (checked) { if (!arr.includes(value)) arr.push(value); }
+  else { const i = arr.indexOf(value); if (i>=0) arr.splice(i,1); }
+  renderQuestionOnly();
+}
+
+function renderQuestionOnly() {
+  const app = document.getElementById('app');
+  if (state.stage === 'quiz') renderQuiz(app);
+}
+
+function nextQuestion() {
+  const qs = visibleQuestions(state.step);
+  const q = qs[state.qIdx];
+  // validate
+  if (q.required && !state.answers[q.id]) return;
+  if (q.type === 'select' && (!state.answers[q.id] || state.answers[q.id] === '')) return;
+  if (q.type === 'checkbox' && (!state.answers[q.id] || state.answers[q.id].length === 0)) return;
+
+  if (state.qIdx < qs.length - 1) {
+    state.qIdx++;
+  } else {
+    // next section
+    state.step++;
+    state.qIdx = 0;
+    if (state.step >= SECTIONS.length) {
+      state.stage = 'review';
+    }
+  }
+  render();
+}
+
+function prevQuestion() {
+  if (state.qIdx > 0) {
+    state.qIdx--;
+  } else if (state.step > 0) {
+    state.step--;
+    state.qIdx = visibleQuestions(state.step).length - 1;
+  }
+  render();
+}
+
+function prevSection() {
+  if (state.step > 0) {
+    state.step--;
+    state.qIdx = 0;
+  }
+  render();
+}
+
+function editAnswers() {
+  // Go back to the first section that has unanswered or low-score questions
+  state.stage = 'quiz';
+  state.step = 0;
+  state.qIdx = 0;
+  render();
+}
+
+function confirmAndAnalyze() {
+  state.report = scoreAnswers(state.answers);
+  state.stage = 'result';
+  render();
+}
+
+function resetAll() {
+  state.step = 0;
+  state.qIdx = 0;
+  state.answers = {};
+  state.report = null;
+  state.stage = 'quiz';
+  render();
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+
+/* ============================================================
+   Report Sending — PDF via email only
+   ============================================================ */
+
+function openSendReport() {
+  document.getElementById('reportModal').classList.remove('hidden');
+  document.getElementById('reportFormView').classList.remove('hidden');
+  document.getElementById('reportSuccessView').classList.add('hidden');
+  document.getElementById('reportLoadingView').classList.add('hidden');
+  document.getElementById('companyName').value = '';
+  document.getElementById('companyEmail').value = '';
+  document.getElementById('companyPhone').value = '';
+  document.getElementById('err-companyName').style.display = 'none';
+  document.getElementById('err-companyEmail').style.display = 'none';
+}
+
+function closeSendReport() {
+  document.getElementById('reportModal').classList.add('hidden');
+}
+
+function clearFieldError(field) {
+  document.getElementById('err-' + field).style.display = 'none';
+}
+
+function getCompanyData() {
+  const name = document.getElementById('companyName').value.trim();
+  const email = document.getElementById('companyEmail').value.trim();
+  const phone = document.getElementById('companyPhone').value.trim();
+  let valid = true;
+
+  if (!name) {
+    document.getElementById('err-companyName').style.display = 'block';
+    valid = false;
+  } else {
+    document.getElementById('err-companyName').style.display = 'none';
+  }
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    document.getElementById('err-companyEmail').style.display = 'block';
+    valid = false;
+  } else {
+    document.getElementById('err-companyEmail').style.display = 'none';
+  }
+
+  return valid ? { name, email, phone } : null;
+}
+
+/* ---- Full report HTML (used for PDF generation) ---- */
+function buildFullReportHTML(company) {
+  const score = state.report || scoreAnswers(state.answers);
+  const flags = findRedFlags(state.answers);
+  const recs = generateRecs(state.answers, score);
+  const date = new Date().toLocaleString('pt-BR');
+  const veredicts = [
+    { max:30, label:'Alto Risco — Não Conforme', desc:'A embalagem apresenta não conformidades críticas com a PPWR. Risco elevado de embargo na fronteira da UE.' },
+    { max:55, label:'Risco Moderado — Necessita Melhorias', desc:'A conformidade é parcial. Diversos pontos precisam de ação imediata antes da exportação.' },
+    { max:75, label:'Risco Baixo — Quase Conforme', desc:'A embalagem está majoritariamente conforme. Ajustes pontuais resolvem as pendências.' },
+    { max:100, label:'Risco Baixo — Bem Posicionado', desc:'A embalagem está bem posicionada para conformidade com a PPWR. Mantenha a documentação atualizada.' },
+  ];
+  const v = veredicts.find(v => score.overall <= v.max) || veredicts[veredicts.length-1];
+  const catLabels = { reciclabilidade:'Reciclabilidade', reciclado:'Conteúdo Reciclado', minimizacao:'Minimização', submateriais:'Separação/Revestimentos', rotulagem:'Rotulagem', substancias:'Substâncias' };
+  const color = score.overall<40?'#dc2626':score.overall<70?'#d97706':'#16a34a';
+
+  // Category cards
+  let catHtml = '';
+  for (const [cat, pts] of Object.entries(score.catScores)) {
+    if (pts === undefined) continue;
+    const c = pts<40?'#dc2626':pts<70?'#d97706':'#16a34a';
+    const b = pts<40?'#fef2f2':pts<70?'#fffbeb':'#f0fdf4';
+    const bo = pts<40?'#fecaca':pts<70?'#fde68a':'#bbf7d0';
+    catHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid ${bo};border-radius:8px;margin-bottom:6px;background:${b}">
+      <span style="font-size:13px;font-weight:600;color:#475569">${catLabels[cat]||cat}</span>
+      <span style="font-size:16px;font-weight:700;color:${c}">${pts}%</span>
+    </div>`;
+  }
+
+  // Red flags
+  let flagsHtml = '';
+  if (flags.length) {
+    flagsHtml = flags.map(f => `<div style="background:#fef2f2;border-left:4px solid #dc2626;padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:13px;line-height:1.5">${f}</div>`).join('');
+  }
+
+  // Recommendations
+  let recsHtml = '';
+  if (recs.length) {
+    recsHtml = recs.map(r => `<div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:4px;font-size:13px;line-height:1.5">${r}</div>`).join('');
+  }
+
+  // Per-question detail
+  let qHtml = '';
+  let qIdx = 0;
+  QUESTIONS.forEach(q => {
+    if (!isVisible(q)) return;
+    const a = state.answers[q.id];
+    if (a === undefined) return;
+    qIdx++;
+    const display = Array.isArray(a) ? a.join(', ') : (typeof a === 'string' ? a : String(a));
+    const pts = pointsFor(q.id, a);
+    const c = pts<40?'#dc2626':pts<70?'#d97706':'#16a34a';
+    const sect = SECTIONS.find(s => s.id === q.section);
+    qHtml += `<tr><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#94a3b8">${qIdx}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#94a3b8">${sect? sect.label : ''}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:12.5px">${q.text}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:12.5px;font-weight:600">${display}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:13px;font-weight:700;color:${c};text-align:center">${pts}</td></tr>`;
+  });
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Relatório PPWR — ${company.name}</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:24px;color:#0f172a;background:#ffffff}
+  .header{text-align:center;padding:20px 0 10px;border-bottom:3px solid #2563eb;margin-bottom:16px}
+  .header h1{font-size:22px;margin:0 0 4px;color:#1e3a5f}
+  .header .sub{color:#64748b;font-size:12px}
+  .header .company{font-size:14px;font-weight:600;color:#0f172a;margin-top:4px}
+  .card{border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:12px;background:#fafbfc}
+  .card h2{font-size:14px;margin:0 0 10px;color:#1e3a5f;font-weight:700}
+  .score-box{text-align:center;padding:12px 0}
+  .score-num{font-size:44px;font-weight:800}
+  .score-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-top:2px}
+  .veredict{font-size:16px;font-weight:700;margin-top:6px}
+  .veredict-desc{font-size:12px;color:#64748b;margin-top:2px}
+  .flags-row{display:flex;gap:10px;justify-content:center;margin:10px 0}
+  .flag-pill{display:flex;align-items:center;gap:5px;padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700}
+  .flag-pill.red{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+  .flag-pill.yellow{background:#fffbeb;color:#d97706;border:1px solid #fde68a}
+  .flag-pill.green{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+  .flag-pill .num{font-size:18px;font-weight:800}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;padding:6px 8px;border-bottom:2px solid #e2e8f0;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+  .footer{text-align:center;font-size:10px;color:#94a3b8;margin-top:16px;padding-top:12px;border-top:1px solid #e2e8f0}
+  @media print{body{padding:16px}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📊 Relatório de Conformidade PPWR</h1>
+  <div class="company">${company.name}</div>
+  <div class="sub">${company.email}${company.phone ? ' • '+company.phone : ''} • ${date}</div>
+</div>
+
+<div class="card">
+  <div class="score-box">
+    <div class="score-num" style="color:${color}">${score.overall}%</div>
+    <div class="score-label">Score PPWR</div>
+    <div class="veredict" style="color:${color}">${v.label}</div>
+    <div class="veredict-desc">${v.desc}</div>
+  </div>
+  <div class="flags-row">
+    <div class="flag-pill red"><span class="num">${flags.length + Object.values(score.catScores).filter(p => p !== undefined && p < 40).length}</span> 🔴 Críticas</div>
+    <div class="flag-pill yellow"><span class="num">${Object.values(score.catScores).filter(p => p !== undefined && p >= 40 && p < 70).length}</span> 🟡 Atenção</div>
+    <div class="flag-pill green"><span class="num">${Object.values(score.catScores).filter(p => p !== undefined && p >= 70).length}</span> 🟢 Conforme</div>
+  </div>
+</div>
+
+<div class="card"><h2>Categorias</h2>${catHtml}</div>
+
+${flagsHtml ? `<div class="card"><h2 style="color:#dc2626">⚠️ Bandeiras Vermelhas</h2>${flagsHtml}</div>` : ''}
+${recsHtml ? `<div class="card"><h2 style="color:#16a34a">✅ Recomendações</h2>${recsHtml}</div>` : ''}
+
+<div class="card"><h2>Detalhamento por Pergunta</h2>
+<table><thead><tr><th>#</th><th>Seção</th><th>Pergunta</th><th>Resposta</th><th style="text-align:center">Pts</th></tr></thead><tbody>${qHtml}</tbody></table>
+</div>
+
+<div class="footer">⚠️ Análise indicativa. Consulte um especialista jurídico em compliance da UE para decisões formais.<br>Gerado por PPWR Checker — ${new Date().toISOString().slice(0,10)}</div>
+</body>
+</html>`;
+}
+
+/* ---- Lead management ---- */
+function getLeads() {
+  try { return JSON.parse(localStorage.getItem('ppwr_leads') || '[]'); }
+  catch(e) { return []; }
+}
+
+function saveLead(company) {
+  const leads = getLeads();
+  const score = state.report || scoreAnswers(state.answers);
+  // Avoid duplicates by email + date
+  leads.push({
+    empresa: company.name,
+    email: company.email,
+    telefone: company.phone,
+    score: score.overall,
+    data: new Date().toISOString().slice(0, 10),
+    hora: new Date().toLocaleTimeString('pt-BR'),
+    material: state.answers.material_principal || '',
+    destino: Array.isArray(state.answers.destinos) ? state.answers.destinos.join('; ') : (state.answers.destinos || ''),
+  });
+  localStorage.setItem('ppwr_leads', JSON.stringify(leads));
+}
+
+function exportLeads() {
+  const leads = getLeads();
+  if (leads.length === 0) {
+    alert('Nenhum lead cadastrado ainda.');
+    return;
+  }
+  // CSV header
+  const headers = ['Empresa','Email','Telefone','Score PPWR','Data','Hora','Material','Destino'];
+  let csv = headers.join(';') + '\n';
+  leads.forEach(l => {
+    csv += [l.empresa||'', l.email||'', l.telefone||'', l.score||'', l.data||'', l.hora||'', l.material||'', l.destino||''].map(v => `"${String(v).replace(/"/g,'""')}"`).join(';') + '\n';
+  });
+  // BOM for Excel
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `PPWR_Leads_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ---- PDF generation and email ---- */
+function generatePDF(company) {
+  // Build the full report HTML
+  const html = buildFullReportHTML(company);
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = '800px';
+  container.style.backgroundColor = '#ffffff';
+  container.style.zIndex = '-1';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  return html2canvas(container, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    width: 800,
+    logging: false,
+  }).then(canvas => {
+    document.body.removeChild(container);
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfW = 210;
+    const pdfH = 297;
+    const imgW = 190;
+    const imgH = (canvas.height / canvas.width) * imgW;
+    let yOffset = 10;
+    // If image is taller than a page, split into pages
+    const pageH = pdfH - 20; // usable height
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, 'JPEG', 10, yOffset, imgW, imgH);
+    } else {
+      // Split into multiple pages
+      const ratio = canvas.height / pageH * (imgW / canvas.width) * 10;
+      // Simpler approach: just scale to fit width and add pages
+      let remaining = imgH;
+      let srcY = 0;
+      const pageImgH = pageH;
+      while (remaining > 0) {
+        const h = Math.min(remaining, pageImgH);
+        // Create a temp canvas for this slice
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.round((h / imgH) * canvas.height);
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, Math.round((srcY / imgH) * canvas.height), canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.9);
+        if (pdf.internal.getNumberOfPages() > 1) pdf.addPage();
+        pdf.addImage(sliceData, 'JPEG', 10, 10, imgW, h);
+        remaining -= h;
+        srcY += h;
+      }
+    }
+    // Add footer
+    const pageCount = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(8);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
+    }
+    return pdf;
+  });
+}
+
+function submitReport() {
+  const company = getCompanyData();
+  if (!company) return;
+
+  // Show loading
+  document.getElementById('reportFormView').classList.add('hidden');
+  document.getElementById('reportLoadingView').classList.remove('hidden');
+
+  // Save lead
+  saveLead(company);
+
+  // Generate PDF
+  generatePDF(company).then(pdf => {
+    // Download the PDF
+    const filename = `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    pdf.save(filename);
+
+    // Open mailto with pre-filled message
+    const score = state.report || scoreAnswers(state.answers);
+    const subject = encodeURIComponent(`Relatório de Conformidade PPWR — ${company.name}`);
+    const body = encodeURIComponent(
+      `Prezados,\n\nSegue em anexo o relatório de conformidade PPWR para ${company.name}.\n\nScore PPWR: ${score.overall}%\n\nO arquivo PDF foi baixado automaticamente — por favor, anexe-o a este e-mail antes de enviar.\n\n---\nGerado por PPWR Checker`
+    );
+
+    // Show success
+    document.getElementById('reportLoadingView').classList.add('hidden');
+    document.getElementById('reportSuccessView').classList.remove('hidden');
+
+    // Open mailto
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  }).catch(err => {
+    console.error('PDF generation failed:', err);
+    document.getElementById('reportLoadingView').classList.add('hidden');
+    document.getElementById('reportFormView').classList.remove('hidden');
+    alert('Erro ao gerar o PDF. Tente novamente.');
+  });
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+
+render();
+</script>
+<div class="modal-overlay hidden" id="reportModal">
+<div class="modal" id="reportModalInner">
+  <div id="reportFormView">
+    <h3>📧 Enviar relatório</h3>
+    <p class="desc">Preencha os dados da empresa para gerar o relatório de conformidade PPWR.</p>
+    <div class="field">
+      <label for="companyName">Empresa *</label>
+      <input type="text" id="companyName" placeholder="Razão social da empresa" oninput="clearFieldError('companyName')">
+      <div class="error" id="err-companyName">Informe o nome da empresa</div>
+    </div>
+    <div class="field">
+      <label for="companyEmail">E-mail *</label>
+      <input type="email" id="companyEmail" placeholder="email@empresa.com.br" oninput="clearFieldError('companyEmail')">
+      <div class="error" id="err-companyEmail">Informe um e-mail válido</div>
+    </div>
+    <div class="field">
+      <label for="companyPhone">Telefone</label>
+      <input type="tel" id="companyPhone" placeholder="+55 11 99999-9999">
+    </div>
+    <div class="nav">
+      <button class="btn btn-outline" onclick="closeSendReport()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitReport()">📧 Gerar PDF e enviar por e-mail</button>
+    </div>
+  </div>
+  <div id="reportLoadingView" class="hidden">
+    <div class="success-box">
+      <div class="spinner"></div>
+      <h4>Gerando relatório PDF...</h4>
+      <p>Estamos montando o relatório completo com todas as análises, gráficos e detalhamento. Isso leva alguns segundos.</p>
+    </div>
+  </div>
+  <div id="reportSuccessView" class="hidden">
+    <div class="success-box">
+      <div class="icon">📧</div>
+      <h4>Relatório PDF gerado!</h4>
+      <p>O PDF foi baixado automaticamente. Anexe-o ao e-mail que foi aberto e envie para o destinatário desejado.</p>
+      <button class="btn btn-primary btn-block" onclick="closeSendReport()">Concluído</button>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>
