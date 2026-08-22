@@ -1202,7 +1202,66 @@ function submitReport() {
   // Save lead
   saveLead(company);
 
-  // Build report HTML off-screen
+  const score = state.report || scoreAnswers(state.answers);
+  const flags = findRedFlags(state.answers);
+  const recs = generateRecs(state.answers, score);
+  const date = new Date().toLocaleString('pt-BR');
+  const veredicts = [
+    { max:30, label:'Alto Risco — Não Conforme' },
+    { max:55, label:'Risco Moderado — Necessita Melhorias' },
+    { max:75, label:'Risco Baixo — Quase Conforme' },
+    { max:100, label:'Risco Baixo — Bem Posicionado' },
+  ];
+  const v = veredicts.find(v => score.overall <= v.max) || veredicts[veredicts.length-1];
+  const catLabels = { reciclabilidade:'Reciclabilidade', reciclado:'Conteúdo Reciclado', minimizacao:'Minimização', submateriais:'Separação/Revestimentos', rotulagem:'Rotulagem', substancias:'Substâncias' };
+
+  // Build full report text for email
+  let det = '';
+  QUESTIONS.forEach(q => {
+    if (!isVisible(q)) return;
+    const a = state.answers[q.id];
+    if (a === undefined) return;
+    const display = Array.isArray(a) ? a.join(', ') : String(a);
+    if (display) det += `\n• ${q.text}\n  → ${display}`;
+  });
+
+  let catDet = '';
+  for (const [cat, pts] of Object.entries(score.catScores)) {
+    if (pts === undefined) continue;
+    catDet += `\n  ${(catLabels[cat]||cat)}: ${pts}%`;
+  }
+
+  let flagDet = '';
+  if (flags.length) flagDet = '\n' + flags.map(f => '\n⚠️  ' + f.replace(/<\/?strong>/g, '*').replace(/<[^>]+>/g, '')).join('');
+
+  let recDet = '';
+  if (recs.length) recDet = '\n' + recs.map(r => '\n✅ ' + r).join('');
+
+  const fullMsg = `Segue o relatório completo de conformidade PPWR para ${company.name}.
+
+═════════════════════════════════════════
+SCORE PPWR: ${score.overall}% — ${v.label}
+═════════════════════════════════════════
+
+Empresa: ${company.name}
+E-mail: ${company.email}${company.phone ? '\nTelefone: ' + company.phone : ''}
+Data: ${date}
+
+── CATEGORIAS ──${catDet}
+
+── BANDEIRAS VERMELHAS ──${flagDet}
+
+── RECOMENDAÇÕES ──${recDet}
+
+── DETALHAMENTO POR PERGUNTA ──${det}
+
+─────────────────────────────────────────
+⚠️  Análise indicativa. Consulte um especialista jurídico
+   em compliance da UE para decisões formais.
+─────────────────────────────────────────
+Gerado por PPWR Checker`;
+
+  // Build PDF in background for download
   const html = buildFullReportHTML(company);
   const container = document.createElement('div');
   container.style.position = 'fixed';
@@ -1214,123 +1273,84 @@ function submitReport() {
   container.innerHTML = html;
   document.body.appendChild(container);
 
-  // Render to canvas (scale 1.5 to keep PDF < 50KB for EmailJS free tier)
-  html2canvas(container, {
-    scale: 1.5,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    width: 800,
-    logging: false,
-  }).then(canvas => {
-    document.body.removeChild(container);
-    const imgData = canvas.toDataURL('image/jpeg', 0.85);
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfW = 210;
-    const pdfH = 297;
-    const imgW = 190;
-    const imgH = (canvas.height / canvas.width) * imgW;
-    const pageH = pdfH - 20;
-
-    if (imgH <= pageH) {
-      pdf.addImage(imgData, 'JPEG', 10, 10, imgW, imgH);
-    } else {
-      let remaining = imgH;
-      let srcY = 0;
-      while (remaining > 0) {
-        const h = Math.min(remaining, pageH);
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.round((h / imgH) * canvas.height);
-        const ctx = sliceCanvas.getContext('2d');
-        ctx.drawImage(canvas, 0, Math.round((srcY / imgH) * canvas.height), canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
-        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.85);
-        if (pdf.internal.getNumberOfPages() > 1) pdf.addPage();
-        pdf.addImage(sliceData, 'JPEG', 10, 10, imgW, h);
-        remaining -= h;
-        srcY += h;
-      }
-    }
-
-    // Footer on all pages
-    const pageCount = pdf.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      pdf.setPage(i);
-      pdf.setFontSize(8);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
-    }
-
-    // Get PDF as blob
-    const blob = pdf.output('blob');
-    const filename = `PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
-    const score = state.report || scoreAnswers(state.answers);
-
-    // Upload to catbox.moe (free, no auth, CORS-friendly)
-    const formData = new FormData();
-    formData.append('reqtype', 'fileupload');
-    formData.append('fileToUpload', blob, filename);
-
-    return fetch('https://catbox.moe/user/api.php', {
-      method: 'POST',
-      body: formData,
-    }).then(r => r.text()).then(url => {
-      if (!url || url.startsWith('error') || !url.startsWith('https://')) {
-        throw new Error('Upload failed: ' + url);
-      }
-      const pdfLink = url;
-
-      // Send via EmailJS
-      return emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
-        to_email: company.email,
-        to_name: company.name,
-        from_name: 'PPWR Checker',
-        message: `Segue o relatório completo de conformidade PPWR para ${company.name}.
-
-Score PPWR: ${score.overall}%
-Empresa: ${company.name}
-Data: ${new Date().toLocaleString('pt-BR')}
-
-📥 Link para download do PDF:
-${pdfLink}
-
----
-Gerado por PPWR Checker`,
-        score_text: `${score.overall}%`,
-        company_name: company.name,
-        date_text: new Date().toLocaleDateString('pt-BR'),
-        download_link: pdfLink,
-      });
-    });
+  // First send email (reliable — no upload needed)
+  emailjs.send(EMAILJS_CONFIG.serviceID, EMAILJS_CONFIG.templateID, {
+    to_email: company.email,
+    to_name: company.name,
+    from_name: 'PPWR Checker',
+    message: fullMsg,
+    score_text: `${score.overall}%`,
+    company_name: company.name,
+    date_text: new Date().toLocaleDateString('pt-BR'),
+    download_link: 'Gerado em ' + date,
   }).then(response => {
-    // Success — EmailJS sent
+    // Email sent! Now generate PDF for download in background
+    html2canvas(container, {
+      scale: 1.5,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      width: 800,
+      logging: false,
+    }).then(canvas => {
+      document.body.removeChild(container);
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgW = 190;
+      const imgH = (canvas.height / canvas.width) * imgW;
+      const pageH = 277;
+
+      if (imgH <= pageH) {
+        pdf.addImage(imgData, 'JPEG', 10, 10, imgW, imgH);
+      } else {
+        let remaining = imgH, srcY = 0;
+        while (remaining > 0) {
+          const h = Math.min(remaining, pageH);
+          const sc = document.createElement('canvas');
+          sc.width = canvas.width;
+          sc.height = Math.round((h / imgH) * canvas.height);
+          sc.getContext('2d').drawImage(canvas, 0, Math.round((srcY / imgH) * canvas.height), canvas.width, sc.height, 0, 0, canvas.width, sc.height);
+          if (pdf.internal.getNumberOfPages() > 1) pdf.addPage();
+          pdf.addImage(sc.toDataURL('image/jpeg', 0.85), 'JPEG', 10, 10, imgW, h);
+          remaining -= h;
+          srcY += h;
+        }
+      }
+      const pageCount = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(148, 163, 184);
+        pdf.text(`PPWR Checker — ${company.name} — Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
+      }
+      pdf.save(`PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+    }).catch(e => {
+      document.body.removeChild(container);
+    });
+
+    // Show success
     document.getElementById('successEmail').textContent = company.email;
     document.getElementById('reportLoadingView').classList.add('hidden');
     document.getElementById('reportSuccessView').classList.remove('hidden');
   }).catch(err => {
-    console.error('PDF/Email generation failed:', err);
+    // Email failed — offer PDF download
     document.getElementById('reportLoadingView').classList.add('hidden');
-    // Fallback: offer direct PDF download + mailto
     document.getElementById('reportFormView').classList.remove('hidden');
-    const msg = err.message || err.text || 'erro desconhecido';
-    if (confirm(`Erro ao enviar o relatório: ${msg}\n\nDeseja baixar o PDF manualmente?`)) {
-      // Re-generate PDF and download
-      const html2 = buildFullReportHTML(company);
-      const c2 = document.createElement('div');
-      c2.style.position = 'fixed'; c2.style.left = '-9999px'; c2.style.width = '800px'; c2.style.background = '#fff';
-      c2.innerHTML = html2;
-      document.body.appendChild(c2);
-      html2canvas(c2, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', width: 800, logging: false })
-        .then(canvas2 => {
-          document.body.removeChild(c2);
-          const { jsPDF } = window.jspdf;
-          const pdf2 = new jsPDF('p', 'mm', 'a4');
-          const imgData2 = canvas2.toDataURL('image/jpeg', 0.85);
-          pdf2.addImage(imgData2, 'JPEG', 10, 10, 190, (canvas2.height/canvas2.width)*190);
-          pdf2.save(`PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
-          alert('PDF baixado! Envie manualmente para o cliente por e-mail.');
-        });
-    }
+
+    html2canvas(container, {
+      scale: 1.5, useCORS: true, backgroundColor: '#ffffff', width: 800, logging: false,
+    }).then(canvas => {
+      document.body.removeChild(container);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      pdf.addImage(imgData, 'JPEG', 10, 10, 190, (canvas.height/canvas.width)*190);
+      pdf.save(`PPWR_${company.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+      alert('E-mail temporariamente indisponível. O PDF foi baixado — envie manualmente para o cliente.');
+    }).catch(e => {
+      document.body.removeChild(container);
+      alert('Erro ao enviar e-mail: ' + (err.message || err.text || 'tente novamente'));
+    });
   });
 }
 
@@ -1405,7 +1425,7 @@ render();
     <div class="success-box">
       <div class="icon">✅</div>
       <h4>Relatório enviado com sucesso!</h4>
-      <p>O relatório PDF foi gerado e o link de download foi enviado para <strong id="successEmail"></strong>. O link expira em 24h. Verifique sua caixa de entrada (e também a pasta de spam).</p>
+      <p>O relatório completo foi enviado para <strong id="successEmail"></strong> com todas as análises, scores e recomendações.<br><br>O PDF foi baixado automaticamente para sua máquina. Verifique sua caixa de entrada (e a pasta de spam).</p>
       <button class="btn btn-primary btn-block" onclick="closeSendReport()">Concluído</button>
     </div>
   </div>
